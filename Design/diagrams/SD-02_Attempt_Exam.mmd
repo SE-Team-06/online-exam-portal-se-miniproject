@@ -1,0 +1,66 @@
+sequenceDiagram
+    autonumber
+    actor S as Student
+    participant UI as React UI<br/>(Dashboard / Exam Page)
+    participant API as API Layer<br/>(Express + auth middleware)
+    participant EX as Exam Management<br/>Service
+    participant DB as MongoDB<br/>(exams, attempts, answers, focusEvents)
+    participant AUD as Audit & Logging<br/>Service
+
+    S->>UI: Click "Start" on an Open exam (dashboard, FR-OE-013)
+    UI->>API: POST /api/v1/exams/{examId}/attempts
+    API->>API: authenticate (JWT + session) + authorize(role = Student) (SEC-OE-004)
+    API->>EX: startAttempt(studentId, examId)
+    EX->>DB: find exam + assignment for student
+    DB-->>EX: exam {startAt, endAt, durationMin, shuffle, status}
+    alt Not assigned to this student
+        EX-->>API: Forbidden
+        API-->>UI: 403 FORBIDDEN
+    else serverNow outside [startAt, endAt] (NFR-OE-010)
+        EX-->>API: ExamNotOpen
+        API-->>UI: 409 EXAM_NOT_OPEN
+    else Attempt already SUBMITTED (FR-OE-014: only once)
+        EX-->>API: AttemptAlreadySubmitted
+        API-->>UI: 409 ATTEMPT_ALREADY_SUBMITTED
+    else Attempt IN_PROGRESS exists (resume, FR-OE-018)
+        EX->>DB: load attempt + saved answers
+        Note right of EX: endsAt is NOT reset - timer continues<br/>from the original end time
+    else First start
+        EX->>DB: insert attempt {startedAt = serverNow,<br/>endsAt = min(serverNow + duration, exam.endAt), status = IN_PROGRESS}<br/>(unique index on examId + studentId)
+        EX->>DB: set exam.locked = true (FR-OE-012)
+        EX->>AUD: log ATTEMPT_STARTED
+    end
+    EX->>DB: load questions with projection excluding correctOption (SEC-OE-007)
+    EX->>EX: Apply question / option shuffle using attempt seed (FR-OE-009)
+    EX-->>API: {attemptId, questions, savedAnswers, endsAt, serverTime}
+    API-->>UI: 201 Created (200 if resumed)
+    UI->>UI: offset = serverTime - clientNow, render countdown = endsAt - (clientNow + offset) (FR-OE-016)
+
+    loop Answer, change, navigate, flag (FR-OE-015)
+        S->>UI: Select / change option, flag question, jump via navigator
+        UI->>UI: Update local state, mark "Unsaved"
+    end
+
+    loop Every 30 s AND on every answer change (debounced 1 s) (FR-OE-017)
+        UI->>API: PATCH /api/v1/attempts/{attemptId}/answers {answers[], clientSeq}
+        API->>EX: saveAnswers(attemptId, studentId, answers, clientSeq)
+        EX->>EX: Check owner = studentId and serverNow <= endsAt + 5 s (SEC-OE-009)
+        alt Attempt closed or expired
+            EX-->>API: AttemptClosed
+            API-->>UI: 409 ATTEMPT_CLOSED
+            UI->>UI: Stop editing, show "Time over - submitting"
+        else Valid
+            EX->>DB: bulkWrite upsert answers (ignore if clientSeq <= lastSeq)
+            EX-->>API: {savedAt, serverTime}
+            API-->>UI: 200 OK (target <= 1 s, NFR-OE-002)
+            UI->>UI: Show "All changes saved hh:mm:ss", re-sync timer offset
+        end
+    end
+
+    opt Window loses focus / tab switched (FR-OE-021)
+        UI->>UI: visibilitychange / blur event
+        UI->>API: POST /api/v1/attempts/{attemptId}/focus-events {type, occurredAt}
+        API->>EX: recordFocusEvent(attemptId, event)
+        EX->>DB: insert focusEvent {attemptId, type, serverTimestamp}
+        API-->>UI: 202 Accepted
+    end
