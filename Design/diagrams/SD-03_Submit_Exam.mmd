@@ -45,11 +45,10 @@ sequenceDiagram
     EV->>EV: score = sum(marks of correct) - negativeMark x wrongCount (min 0)<br/>passed = score >= passMark
     EV->>DB: update attempt {score, passed, evaluatedAt} (target <= 5 s, NFR-OE-003)
     EV-->>EX: result
-    opt Results released for this exam
-        EX-)NOTIF: resultAvailable(studentId, examId) (async, FR-OE-026)
-        NOTIF->>DB: insert in-app notification
-        NOTIF-)NOTIF: send email via SMTP
-    end
-    EX-->>API: {status: SUBMITTED, submittedAt, resultReleased}
+    EX-)NOTIF: resultAvailable(studentId, examId) (async, FR-OE-026)
+    NOTIF->>DB: insert in-app notification
+    NOTIF-)NOTIF: send email via SMTP
+    EX-->>API: {status: SUBMITTED, submittedAt, score, maxScore, passed, reviewAvailableAt = exam.endAt}
     API-->>UI: 200 OK
-    UI->>S: "Exam submitted" screen, link to result if released (FR-OE-023)
+    UI->>S: "Exam submitted" screen with score + pass/fail (FR-OE-023)
+    Note over UI,EX: Question-wise review with correct answers (API-16) unlocks only after exam.endAt<br/>and only if enabled by the Instructor (SEC-OE-007)
