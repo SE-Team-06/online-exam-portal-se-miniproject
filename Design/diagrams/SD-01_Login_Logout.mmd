@@ -1,0 +1,57 @@
+sequenceDiagram
+    autonumber
+    actor U as User (Student / Instructor / Admin)
+    participant UI as React UI<br/>(Login Page)
+    participant API as API Layer<br/>(Express routes + middleware)
+    participant AUTH as Auth & Authorization<br/>Service
+    participant DB as MongoDB<br/>(users, sessions)
+    participant AUD as Audit & Logging<br/>Service
+
+    U->>UI: Enter email + password, click "Login"
+    UI->>UI: Client-side format check (non-empty, email pattern)
+    UI->>API: POST /api/v1/auth/login {email, password} (HTTPS, TLS 1.2+)
+    API->>API: Rate limiter: max 10 req/min per IP (SEC-OE-010)
+    alt Limit exceeded
+        API-->>UI: 429 RATE_LIMITED (Retry-After header)
+    end
+    API->>API: Validate + sanitise body (SEC-OE-008)
+    alt Invalid body
+        API-->>UI: 400 VALIDATION_ERROR
+    end
+    API->>AUTH: authenticate(email, password, ip)
+    AUTH->>DB: findOne users {email}
+    DB-->>AUTH: user doc (passwordHash, role, status, failedLogins, lockedUntil)
+    alt User not found / inactive / email not verified
+        AUTH->>AUD: log LOGIN_FAILURE {email, ip, reason}
+        AUTH-->>API: InvalidCredentials
+        API-->>UI: 401 INVALID_CREDENTIALS (generic message)
+    else lockedUntil > serverNow
+        AUTH->>AUD: log LOGIN_BLOCKED_LOCKED
+        AUTH-->>API: AccountLocked
+        API-->>UI: 423 ACCOUNT_LOCKED {retryAfter}
+    else Account active
+        AUTH->>AUTH: bcrypt.compare(password, passwordHash) (SEC-OE-001)
+        alt Password mismatch
+            AUTH->>DB: $inc failedLogins, if failedLogins = 5 set lockedUntil = now + 15 min (SEC-OE-003)
+            AUTH->>AUD: log LOGIN_FAILURE {userId, ip}
+            AUTH-->>API: InvalidCredentials
+            API-->>UI: 401 INVALID_CREDENTIALS
+        else Password correct
+            AUTH->>DB: reset failedLogins = 0, insert session {sid, userId, role, lastActivity, expiresAt}
+            AUTH->>AUTH: Sign JWT {sub, role, sid} (short-lived)
+            AUTH->>AUD: log LOGIN_SUCCESS {userId, ip, timestamp} (SEC-OE-011)
+            AUTH-->>API: {user, token, csrfToken}
+            API-->>UI: 200 {user: {id, name, role}, csrfToken}<br/>Set-Cookie: access_token, HttpOnly, Secure, SameSite=Strict (SEC-OE-006)
+            UI->>UI: Route to role dashboard (Student / Instructor / Admin) (FR-OE-003)
+        end
+    end
+
+    Note over U,AUD: Every later request: authenticate middleware verifies JWT + session (30-min inactivity, SEC-OE-006),<br/>then authorize(role) middleware returns 403 FORBIDDEN on role mismatch (SEC-OE-004)
+
+    U->>UI: Click "Logout"
+    UI->>API: POST /api/v1/auth/logout (cookie + X-CSRF-Token)
+    API->>AUTH: logout(sid)
+    AUTH->>DB: delete session {sid} (token is now unusable)
+    AUTH->>AUD: log LOGOUT {userId}
+    API-->>UI: 204 No Content, cookie cleared (FR-OE-004)
+    UI->>UI: Redirect to Login page
