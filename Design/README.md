@@ -1,6 +1,6 @@
 # Design (P4 – Gagan)
 
-Full design is in **SAD_Online_Exam_Portal_v1.2.docx → Section 4**. This folder holds the diagram sources.
+Full design is in **SAD_Online_Exam_Portal_v1.4.docx → Section 4**. This folder holds the diagram sources.
 
 | ID | Flow | Use case | Source |
 |----|------|----------|--------|
