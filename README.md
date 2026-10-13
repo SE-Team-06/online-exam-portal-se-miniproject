@@ -8,8 +8,8 @@ Requirements: Node.js 22.12 or newer and npm. For persistent local development, 
 
 ```powershell
 Copy-Item .env.example .env
-npm ci
-npm run dev
+npm.cmd ci
+npm.cmd run dev
 ```
 
 The API starts on `http://localhost:4000`; Vite serves the web app on `http://localhost:5173`. The API requires `MONGODB_URI`. The `.env` file is ignored by Git. Do not put credentials, real student data, or exam answers in the repository.
@@ -17,8 +17,8 @@ The API starts on `http://localhost:4000`; Vite serves the web app on `http://lo
 ## Temporary demo (no persistent database required)
 
 ```powershell
-npm ci
-npm run demo
+npm.cmd ci
+npm.cmd run demo
 ```
 
 The demo starts a temporary MongoDB process and seeds one instructor, one student, and one short sample exam. It prints a newly generated password for both dummy accounts to the local terminal. Open `http://localhost:5173` and sign in as `student@example.test` to complete the timed MCQ flow. Stop with Ctrl+C; demo data is discarded. Keep the generated password out of screenshots, commits, and shared logs. The demo is for local evaluation only.
@@ -28,8 +28,8 @@ For the instructor demo, sign in as `instructor@example.test` using the password
 ## Checks
 
 ```powershell
-npm test
-npm run build
+npm.cmd test
+npm.cmd run build
 ```
 
 The current local execution record is in [`docs/test-execution.md`](docs/test-execution.md); it covers this initial implementation slice only.
@@ -39,9 +39,10 @@ The current local execution record is in [`docs/test-execution.md`](docs/test-ex
 - If the persistent API cannot connect, confirm MongoDB is running and that `MONGODB_URI` in your local `.env` points to it.
 - If the demo cannot start its temporary MongoDB on the first run, allow its MongoDB test binary to download and retry when network access is available.
 - If port 4000 or 5173 is already in use, stop the other local process or configure a free port before starting the app.
-- If `npm ci` reports Windows `EPERM` replacing a native module, stop other Node/Vite processes using this checkout and retry. Do not delete project source or lockfiles to work around it.
+- In PowerShell, use `npm.cmd` if `npm` selects `npm.ps1` and execution policy blocks scripts. This avoids changing the machine execution policy.
+- If `npm.cmd ci` reports Windows `EPERM` replacing a native module, close terminals running this checkout and retry. If the lock error persists, restart Windows before reopening the project. Do not manually delete the locked native module or project source/lockfiles.
 
-For team status, setup handover, requirement coverage and proposed next steps, see [`docs/TEAM_HANDOVER.md`](docs/TEAM_HANDOVER.md).
+For team status, setup handover, requirement coverage and proposed next steps, see [`docs/TEAM_HANDOVER.md`](docs/TEAM_HANDOVER.md). The [`presentation checklist`](docs/PRESENTATION_CHECKLIST.md) covers the verified demo and project-management claims.
 
 Integration tests use a temporary MongoDB process. Its first run may need network access to download a MongoDB binary into the local tool cache. No global MongoDB installation or Docker is required for tests.
 
