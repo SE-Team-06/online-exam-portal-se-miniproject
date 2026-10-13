@@ -82,6 +82,13 @@ Detailed gaps and risks are in [implementation-gap-register.md](implementation-g
 
 ## Verification record
 
+### Latest pre-submission rerun — 13 October 2026
+
+- From a clean temporary archive of branch commit `fd54d97`, `npm ci` completed with 184 packages; `npm test` passed **12/12** (9 workflow integration tests and 3 scoring tests); `npm run build` passed (server syntax checks and Vite production build). This validates the committed source and lockfile with a clean dependency installation.
+- In the current `work/repo` checkout, `npm test` failed because the existing ignored `node_modules` tree is incomplete: 3 scoring tests passed, but the workflow test could not import `mongoose` because `node_modules/mongoose/index.js` is missing. `npm run build` passed server syntax checks but failed because the Vite executable is missing.
+- A non-saving npm dependency repair attempt failed with Windows `EPERM` writing to the user-level npm cache and `ENOENT`/`ENOTEMPTY` errors in the dependency tree. No tracked package manifest or lockfile changed. Stop any app/terminal processes using this checkout, then run `npm ci`, `npm test`, and `npm run build` locally. Do not interpret the isolated archive pass as a successful rerun in the current checkout.
+- The verification table below records the earlier 13 October successful run; this latest rerun note supersedes it for current-checkout status.
+
 Local checks actually completed on **13 October 2026**:
 
 | Check | Result |

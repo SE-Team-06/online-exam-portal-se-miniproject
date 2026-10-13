@@ -1,5 +1,12 @@
 # Local test execution record
 
+## Latest pre-submission rerun — 13 October 2026
+
+- Exact committed source at `fd54d97`, extracted to an isolated temporary directory: `npm ci` passed (184 packages), `npm test` passed 12/12 (9 workflow integration and 3 scoring tests), and `npm run build` passed (server syntax checks and Vite production build).
+- Current repository checkout: `npm test` failed at workflow-test module loading because `mongoose/index.js` is missing from the incomplete ignored `node_modules` tree; the three scoring tests passed. `npm run build` passed API syntax checks but failed because the Vite executable is absent.
+- Attempted `npm install --ignore-scripts --no-audit --no-fund --no-save` to repair the current ignored dependency tree. It failed with Windows `EPERM` writing to the user npm cache and `ENOENT`/`ENOTEMPTY` errors while handling packages. No tracked package manifest or lockfile was changed. Close processes using this checkout, then run `npm ci`, `npm test`, and `npm run build` again.
+- The successful isolated archive run verifies the committed source with clean locked dependencies; it does not turn the current checkout failure into a pass.
+
 Date: 13 October 2026. Environment: Node.js v22.21.0, npm 10.9.4, Windows; integration tests used `mongodb-memory-server-core` with an ephemeral local MongoDB process. All account names, email addresses, passwords and exam data used in tests are synthetic. No external exam data was used.
 
 Command: `npm test`
