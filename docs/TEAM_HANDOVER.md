@@ -37,15 +37,15 @@ Requirements: Windows PowerShell, Node.js 22.12 or newer, and npm.
 ```powershell
 git clone https://github.com/chhavi2308-s/online-exam-portal-se-miniproject.git
 cd online-exam-portal-se-miniproject
-npm ci
-npm test
-npm run build
+npm.cmd ci
+npm.cmd test
+npm.cmd run build
 ```
 
 To start the disposable demo (no persistent MongoDB setup required):
 
 ```powershell
-npm run demo
+npm.cmd run demo
 ```
 
 Open <http://localhost:5173>. The API listens at <http://localhost:4000>. The demo prints a freshly generated password for `instructor@example.test` and `student@example.test` to the local terminal; both seeded accounts use that run's generated password. Retrieve it from that terminal only. Do not copy it into this document, screenshots, chat, commits, or shared logs. Stop with Ctrl+C; all demo data is discarded.
@@ -54,8 +54,8 @@ For persistent local development, install/run MongoDB Community Server, copy `.e
 
 ```powershell
 Copy-Item .env.example .env
-npm ci
-npm run dev
+npm.cmd ci
+npm.cmd run dev
 ```
 
 The `.env` file is ignored. Do not put credentials, real student data, or live exam content in it or the repository. Tests use a temporary MongoDB process; the first test run may download a MongoDB binary if it is not cached. `npm ci --offline` may fail if the package cache is incomplete.
@@ -82,12 +82,12 @@ Detailed gaps and risks are in [implementation-gap-register.md](implementation-g
 
 ## Verification record
 
-### Presentation-readiness rerun — 13 October 2026 (latest)
+### Presentation-readiness verification — 13 October 2026 (latest)
 
-- Current checkout is still clean at the start of the presentation-readiness edits, on `feature/mvp-exam-workflow`; it is eight commits ahead of `origin/main` and has not been pushed. No demo server was listening on ports 4000 or 5173 at the time of the check.
-- Dependency repair is **blocked by a Windows file lock/permission error**. `npm ci --dry-run` resolved the lockfile, but real `npm ci` failed with `EPERM` unlinking the Rolldown native binary. Windows denied command-line inspection of several `node.exe` processes; none were stopped. See [test-execution.md](test-execution.md) for the exact safe retry.
-- Latest actual-checkout results: `npm test` failed because `mongoose` is absent from the incomplete ignored `node_modules` tree (3 scoring tests passed; workflow tests could not load); `npm run build` passed server syntax checks and failed because Vite is absent. These are environment/dependency failures; no application source-code defect was identified by these runs. This is not a passing test/build result.
-- The demo was not started in this rerun. Earlier `/api/health` and `/` smoke checks returned HTTP 200, and Chhavi separately reported logging in to the instructor and seeing a subject. No fresh student or instructor browser workflow was verified today. The clean-source automated workflow tests in the historical verification section are not a substitute for a live demo run.
+- User-reported `npm.cmd ci` completed in this checkout (184 packages added, 187 audited, 0 vulnerabilities). The PowerShell `npm` command selected blocked `npm.ps1`; using `npm.cmd` worked without changing execution policy.
+- Independently reran `npm.cmd test` and `npm.cmd run build` from this repository on `feature/mvp-exam-workflow`: **12/12 tests passed** (9 workflow integration and 3 scoring; 0 failed/skipped); server syntax checks passed; Vite production build passed (15 modules; JS 227.05 kB / 71.03 kB gzip, CSS 5.13 kB / 1.71 kB gzip).
+- The earlier Windows `EPERM` while unlinking the Rolldown binary was resolved by the user’s later successful `npm.cmd ci`. No native binary was manually deleted and no machine-wide execution policy was changed.
+- The demo was not freshly started after dependency repair. Earlier `/api/health` and `/` smoke checks returned HTTP 200, and Chhavi separately reported logging in to the instructor and seeing a subject. A fresh student browser workflow remains unverified today; automated API workflow tests are not proof of the full live UI path.
 - Live Jira readback on 13 October confirms 29 issues (5 epics, 23 stories, 1 task). Board 70 has Sprint 1 (9 issues / 33 provisional points) and Sprint 2 (8 issues / 45 provisional points); both are future and have 0 completed issues. The remaining 12 issues are in backlog (30 provisional points). All items remain unassigned. **FR-OE-024, NFR-OE-004, and NFR-OE-009 remain Must items outside the proposed sprints.** Do not call them done or silently remove them.
 - The authenticated GitHub Project main view was opened and showed **0 matching items** across its workflow columns. It is empty. Jira remains the authoritative item backlog; do not mirror the 29 Jira issues as 29 new GitHub issues. A safe approach is to keep the project board empty until the team agrees on one GitHub summary/tracking item linking the Jira project, or to use the project README/description for the Jira link and leave individual Jira work in Jira.
 - `rg --files` found no `.mp4`, `.webm`, `.mov`, `.mkv`, or `.gif` demo recording files in this repository. This only verifies the local repository contents; it cannot determine whether a video exists elsewhere. The assignment-required one-minute Sprint 1 and two-minute Sprint 2 videos still need to be recorded from the real product and uploaded by the team.
@@ -96,7 +96,7 @@ Detailed gaps and risks are in [implementation-gap-register.md](implementation-g
 
 - From a clean temporary archive of branch commit `fd54d97`, `npm ci` completed with 184 packages; `npm test` passed **12/12** (9 workflow integration tests and 3 scoring tests); `npm run build` passed (server syntax checks and Vite production build). This validates the committed source and lockfile with a clean dependency installation.
 - In the current `work/repo` checkout, `npm test` failed because the existing ignored `node_modules` tree is incomplete: 3 scoring tests passed, but the workflow test could not import `mongoose` because `node_modules/mongoose/index.js` is missing. `npm run build` passed server syntax checks but failed because the Vite executable is missing.
-- A non-saving npm dependency repair attempt failed with Windows `EPERM` writing to the user-level npm cache and `ENOENT`/`ENOTEMPTY` errors in the dependency tree. No tracked package manifest or lockfile changed. Stop any app/terminal processes using this checkout, then run `npm ci`, `npm test`, and `npm run build` locally. Do not interpret the isolated archive pass as a successful rerun in the current checkout.
+- An earlier non-saving npm dependency repair attempt failed with Windows `EPERM` writing to the user-level npm cache and `ENOENT`/`ENOTEMPTY` errors in the dependency tree. No tracked package manifest or lockfile changed. This was superseded by the later successful `npm.cmd ci`, tests, and build recorded above.
 - The verification table below records the earlier successful run. The current-checkout results in the presentation-readiness rerun above supersede it for present status.
 
 Local checks actually completed on **13 October 2026**:
@@ -173,12 +173,13 @@ Confirm or change this proposal as a team before assigning people in a tracker. 
 ## Priority checklist
 
 1. Review the local implementation, corrected test mapping, and RTM evidence sheet; agree which Must requirements can fit the two official sprint windows.
-2. Confirm proposed task division and estimates with the four-person team; keep assignees empty until agreement and verified tracker identities.
-3. Keep Jira OEPSE authoritative. The private GitHub Project is empty and unshared; do not add people without explicit approval. Link code commits and PRs to Jira keys.
-4. Confirm all four teammates can access Jira OEPSE, then agree on issue ownership and capacity before assigning work or treating estimates as sprint commitments.
-5. Close any PowerShell/VS Code terminals running this repository's Node/Vite/demo processes, then run `npm ci --no-audit --no-fund`, `npm test`, and `npm run build` from the repo directory. If `EPERM` persists, restart Windows and retry before opening the project. Do not delete the native module manually or stop unidentified processes.
-6. Review and commit the local feature-branch changes. Request separate approval before any push/PR/merge.
-7. Record Sprint 1 and Sprint 2 demos from the actual running product; upload only the real recordings as assignment requires.
+2. Rehearse the instructor and student demo flows using the disposable accounts; automated API tests pass, but the browser demo has not been freshly verified after dependency repair.
+3. Confirm proposed task division and estimates with the four-person team; keep assignees empty until agreement and verified tracker identities.
+4. Keep Jira OEPSE authoritative. The private GitHub Project is empty and unshared; do not add people without explicit approval. Link code commits and PRs to Jira keys.
+5. Confirm all four teammates can access Jira OEPSE, then agree on issue ownership and capacity before assigning work or treating estimates as sprint commitments.
+6. Dependency installation and automated tests/build now pass locally using `npm.cmd` (see the latest verification above). Use `npm.cmd run demo` and do not expose its temporary password.
+7. Review and commit local feature-branch changes. Request separate approval before any push/PR/merge.
+8. Record Sprint 1 and Sprint 2 demos from the actual running product; upload only the real recordings as assignment requires.
 
 ## Verified links and current manual actions
 
