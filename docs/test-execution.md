@@ -1,11 +1,23 @@
 # Local test execution record
 
-## Latest pre-submission rerun — 13 October 2026
+## Presentation-readiness rerun — 13 October 2026 (latest)
+
+- Ran from the actual `work/repo` checkout on `feature/mvp-exam-workflow` with Node.js v22.21.0 and npm 10.9.4.
+- Process check found no listener on ports 4000 or 5173. Windows denied process-command-line inspection and `tasklist /v`; several `node.exe` processes were visible but could not be attributed safely. No process was terminated.
+- `npm ci --dry-run --ignore-scripts --no-audit --no-fund --cache .cache/npm` succeeded, confirming the lockfile plan resolves. The real `npm ci --no-audit --no-fund --cache .cache/npm` failed with `EPERM` unlinking `node_modules/@rolldown/binding-win32-x64-msvc/rolldown-binding.win32-x64-msvc.node`. No source or tracked dependency files were changed.
+- Actual-checkout `npm test` failed: 3 scoring tests passed; the workflow test could not load because `node_modules/mongoose/index.js` is missing. No tests were skipped.
+- Actual-checkout `npm run build` passed the server syntax checks, then failed because the Vite executable is missing.
+- The demo was not started during this rerun because the dependencies remain incomplete. The earlier same-day `/api/health` and `/` startup smoke check is historical evidence only; it does not verify the current run or student/instructor browser workflows.
+- Safe next step: close terminals/editors running this checkout (especially any `npm run demo`, `npm run dev`, or `vite` process), then retry `npm ci`, `npm test`, and `npm run build` from the repository directory. If Windows still reports `EPERM`, restart Windows and retry before launching the project. Do not manually delete the locked native binary or terminate unidentified Node processes.
+
+## Earlier pre-submission verification — 13 October 2026
 
 - Exact committed source at `fd54d97`, extracted to an isolated temporary directory: `npm ci` passed (184 packages), `npm test` passed 12/12 (9 workflow integration and 3 scoring tests), and `npm run build` passed (server syntax checks and Vite production build).
 - Current repository checkout: `npm test` failed at workflow-test module loading because `mongoose/index.js` is missing from the incomplete ignored `node_modules` tree; the three scoring tests passed. `npm run build` passed API syntax checks but failed because the Vite executable is absent.
 - Attempted `npm install --ignore-scripts --no-audit --no-fund --no-save` to repair the current ignored dependency tree. It failed with Windows `EPERM` writing to the user npm cache and `ENOENT`/`ENOTEMPTY` errors while handling packages. No tracked package manifest or lockfile was changed. Close processes using this checkout, then run `npm ci`, `npm test`, and `npm run build` again.
 - The successful isolated archive run verifies the committed source with clean locked dependencies; it does not turn the current checkout failure into a pass.
+
+## Details of earlier clean-source verification (historical)
 
 Date: 13 October 2026. Environment: Node.js v22.21.0, npm 10.9.4, Windows; integration tests used `mongodb-memory-server-core` with an ephemeral local MongoDB process. All account names, email addresses, passwords and exam data used in tests are synthetic. No external exam data was used.
 
