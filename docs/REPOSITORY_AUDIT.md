@@ -29,18 +29,18 @@ Audit date: 13 October 2026. This report describes the existing clone and curren
 
 - The submitted SRS contains 27 FR, 14 NFR and 12 SEC requirements (53 unique IDs). SRS remains primary. No requirement is marked fully complete based solely on partial code; see `SRS/RTM_Online_Exam_Portal.xlsx` > `Implementation Evidence`.
 - Test execution documents local implementation tests, not completion of the approved STP. Submitted SRS/SAD/STP and diagrams were preserved; SRS v1.2/SAD v1.4 related-document version mismatch and API/design conformance remain review items.
-- Official assignment requires a repository-linked GitHub Project, two official sprint dates (19–23 Oct and 26–30 Oct 2026), CI, and real Sprint 1/2 demo videos. The GitHub connector must be connected before existing project search or board setup can be verified.
+- Official assignment requires a repository-linked GitHub Project, two official sprint dates (19–23 Oct and 26–30 Oct 2026), CI, and real Sprint 1/2 demo videos. A private repository-linked Project was created and verified in the authenticated browser session; its backlog is still empty.
 
 ## GitHub/Jira status and blockers
 
-- GitHub auth and read access were verified earlier against the existing remote; the existing repo was cloned with history. No code was pushed.
+- GitHub auth and read access were verified earlier against the existing remote; the existing repo was cloned with history. No code was pushed. A private repository-linked Project exists at `https://github.com/users/chhavi2308-s/projects/1` (main view: `/views/1`). The repository Projects tab confirms the association. Status values, P0–P3, Story Points, Sprint periods, five Epic values, project description and README are configured. No issues were created/imported; the project has zero additional members. No collaborator access was changed.
 - Atlassian read-only search found four visible projects, four boards and 24 issues, with no Online Exam Portal/Team 6 match. Site available: `https://chhavis0823.atlassian.net`. This does not establish that it is the intended shared course site. Project-key `OEP` availability/project-create permission could not be confirmed through the available project-creation operation; no Jira write was made.
 - Draft planning files remain at workspace `outputs/jira-planning-proposal.md` and `outputs/jira-backlog-draft.csv`. Verified totals: 5 epics, 23 stories, 1 task, 108 provisional points; Sprint 1 33, Sprint 2 45, backlog 30. FR-OE-024, NFR-OE-004, and NFR-OE-009 remain Must items outside the proposed sprints.
 - Team 6 names are Chhavi Siddarth Wadhwa, Dhanya S Prasad, Gagan P, and Harsha K. Chhavi is the confirmed Team Lead/Product Owner. Other individual assignments and tracker identities remain unconfirmed.
 
 ## Risks and next work
 
-1. Connect GitHub in Codex, search for an existing repo-linked Project, then configure/create only if destination and no-duplicate status are verified.
+1. Review the private repository-linked Project and decide whether to add teammates; its metadata is configured but no backlog work items exist yet.
 2. Confirm the intended Jira site and obtain a verifiable Jira project creation path/permission before making Jira items.
 3. Rerun `npm ci` after ensuring no process holds the native Rolldown file; rerun tests/build afterward.
 4. Team review of estimates and Must backlog; implement remaining prioritized requirements and expand test coverage.

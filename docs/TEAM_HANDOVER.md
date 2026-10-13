@@ -99,8 +99,8 @@ The exact test mapping and execution limitations are in [test-execution.md](test
 
 ### GitHub
 
-- The local repo and feature branch preserve the original `main` history. This handover was drafted before the authorized local commit; see the current `git log` for its exact hash. No push, PR, merge, or remote configuration change has occurred.
-- The course Part 2 requires a GitHub Project linked to the repository. No suitable existing project was verified and no GitHub Project was created. The GitHub connector still needs to be connected in Codex before we can search/create/verify a board. After connection, search for an existing project before creating one.
+- The local repo and feature branch preserve the original `main` history. The implementation and supporting documents are committed locally on `feature/mvp-exam-workflow`; see `git log` for exact hashes. No push, PR, merge, or remote configuration change has occurred.
+- A repository-linked GitHub Project was created after verifying the authenticated account owns the private repository and the repository Projects page had no existing project. Project: [Online Exam Portal — Software Engineering](https://github.com/users/chhavi2308-s/projects/1); repository association: [repository Projects tab](https://github.com/chhavi2308-s/online-exam-portal-se-miniproject/projects). It is private. Settings verified: Status = Backlog, Ready, In Progress, In Review, Done; Priority = P0–P3; numeric Story Points; Sprint iterations with official dates; custom Epic single-select with the five draft epics; repository is the default project repository. Project README and description were populated with the SRS-driven planning notes.
 - The local CI workflow is `.github/workflows/ci.yml` (`Node CI`), runs on PRs and pushes to `main`, installs with `npm ci`, runs tests and build, and grants `contents: read`. It has not run remotely.
 
 ### Jira
@@ -139,7 +139,7 @@ Confirm or change this proposal as a team before assigning people in a tracker. 
 - Review the SAD API references against actual routes and resolve the SRS v1.2/SAD v1.4 related-document version mismatch with team approval; do not silently edit submitted documents.
 - Confirm login rate-limit behavior via a 429 test, lockout duration, timer drift, autosave cadence, and broader security cases.
 - Decide a safe shared environment, durable database/deployment, HTTPS, backup, monitoring and operational secrets approach before any production claim.
-- GitHub Project and collaborator access remain unverified. Jira site/project creation remains blocked pending intended-site/permission confirmation.
+- GitHub Project setup is verified, but it currently has no backlog work items and has zero additional project members. Do not treat the board metadata as an imported backlog. Sharing with teammates requires an explicit access decision; repository contributors are not automatically project members. Jira site/project creation remains blocked pending intended-site/permission confirmation.
 - Sprint 1 one-minute and Sprint 2 two-minute demo recordings are assignment deliverables. No recording has been generated or uploaded. After Sprint 2, update docs and freeze development as instructed.
 
 ## How the team should collaborate
@@ -155,7 +155,7 @@ Confirm or change this proposal as a team before assigning people in a tracker. 
 
 1. Review the local implementation, corrected test mapping, and RTM evidence sheet; agree which Must requirements can fit the two official sprint windows.
 2. Confirm proposed task division and estimates with the four-person team; keep assignees empty until agreement and verified tracker identities.
-3. Connect the GitHub integration in Codex; read-only search for an existing repository-linked Project, then configure/create only after confirming no duplicate.
+3. Review the private GitHub Project configuration; decide whether to add the three teammates to project access, then populate it only after agreeing on the authoritative issue tracker to avoid duplicate backlog items.
 4. Decide whether the accessible personal Jira site is acceptable or identify the official shared site; confirm `OEP` key availability and project-create permission before any Jira write.
 5. Resolve the Windows `npm ci --offline` EPERM after ensuring no process is holding Rolldown's native module, then rerun clean install, tests and build.
 6. Review and commit the local feature-branch changes. Request separate approval before any push/PR/merge.
@@ -165,5 +165,5 @@ Confirm or change this proposal as a team before assigning people in a tracker. 
 
 - [GitHub repository](https://github.com/chhavi2308-s/online-exam-portal-se-miniproject)
 - [Accessible Jira site](https://chhavis0823.atlassian.net) — no OEP project URL exists yet.
-- GitHub Project, Jira project/board/backlog/sprint URLs: **not available; none have been verified or created**.
+- [GitHub Project](https://github.com/users/chhavi2308-s/projects/1) and its [main view](https://github.com/users/chhavi2308-s/projects/1/views/1) are verified. No Jira project, board, backlog, or sprint URL exists because no Jira data has been created.
 - Source deliverables: [SRS PDF](../SRS/SRS_Online_Exam_Portal.pdf), [SAD](../SAD_Online_Exam_Portal_v1.4.docx), [STP PDF](../STP/Online_Exam_Portal_Software_Test_Plan_v1.1.pdf), [STRIDE table](../Architecture/Traceability%20to%20Requirements%20%26%20Security%20Architecture%20%E2%80%93%20STRIDE%20Table.xlsx), [design diagrams](../Design/diagrams/README.md).
