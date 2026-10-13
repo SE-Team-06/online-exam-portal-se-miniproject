@@ -82,12 +82,22 @@ Detailed gaps and risks are in [implementation-gap-register.md](implementation-g
 
 ## Verification record
 
-### Latest pre-submission rerun — 13 October 2026
+### Presentation-readiness rerun — 13 October 2026 (latest)
+
+- Current checkout is still clean at the start of the presentation-readiness edits, on `feature/mvp-exam-workflow`; it is eight commits ahead of `origin/main` and has not been pushed. No demo server was listening on ports 4000 or 5173 at the time of the check.
+- Dependency repair is **blocked by a Windows file lock/permission error**. `npm ci --dry-run` resolved the lockfile, but real `npm ci` failed with `EPERM` unlinking the Rolldown native binary. Windows denied command-line inspection of several `node.exe` processes; none were stopped. See [test-execution.md](test-execution.md) for the exact safe retry.
+- Latest actual-checkout results: `npm test` failed because `mongoose` is absent from the incomplete ignored `node_modules` tree (3 scoring tests passed; workflow tests could not load); `npm run build` passed server syntax checks and failed because Vite is absent. These are environment/dependency failures; no application source-code defect was identified by these runs. This is not a passing test/build result.
+- The demo was not started in this rerun. Earlier `/api/health` and `/` smoke checks returned HTTP 200, and Chhavi separately reported logging in to the instructor and seeing a subject. No fresh student or instructor browser workflow was verified today. The clean-source automated workflow tests in the historical verification section are not a substitute for a live demo run.
+- Live Jira readback on 13 October confirms 29 issues (5 epics, 23 stories, 1 task). Board 70 has Sprint 1 (9 issues / 33 provisional points) and Sprint 2 (8 issues / 45 provisional points); both are future and have 0 completed issues. The remaining 12 issues are in backlog (30 provisional points). All items remain unassigned. **FR-OE-024, NFR-OE-004, and NFR-OE-009 remain Must items outside the proposed sprints.** Do not call them done or silently remove them.
+- The authenticated GitHub Project main view was opened and showed **0 matching items** across its workflow columns. It is empty. Jira remains the authoritative item backlog; do not mirror the 29 Jira issues as 29 new GitHub issues. A safe approach is to keep the project board empty until the team agrees on one GitHub summary/tracking item linking the Jira project, or to use the project README/description for the Jira link and leave individual Jira work in Jira.
+- `rg --files` found no `.mp4`, `.webm`, `.mov`, `.mkv`, or `.gif` demo recording files in this repository. This only verifies the local repository contents; it cannot determine whether a video exists elsewhere. The assignment-required one-minute Sprint 1 and two-minute Sprint 2 videos still need to be recorded from the real product and uploaded by the team.
+
+### Earlier pre-submission verification details — 13 October 2026
 
 - From a clean temporary archive of branch commit `fd54d97`, `npm ci` completed with 184 packages; `npm test` passed **12/12** (9 workflow integration tests and 3 scoring tests); `npm run build` passed (server syntax checks and Vite production build). This validates the committed source and lockfile with a clean dependency installation.
 - In the current `work/repo` checkout, `npm test` failed because the existing ignored `node_modules` tree is incomplete: 3 scoring tests passed, but the workflow test could not import `mongoose` because `node_modules/mongoose/index.js` is missing. `npm run build` passed server syntax checks but failed because the Vite executable is missing.
 - A non-saving npm dependency repair attempt failed with Windows `EPERM` writing to the user-level npm cache and `ENOENT`/`ENOTEMPTY` errors in the dependency tree. No tracked package manifest or lockfile changed. Stop any app/terminal processes using this checkout, then run `npm ci`, `npm test`, and `npm run build` locally. Do not interpret the isolated archive pass as a successful rerun in the current checkout.
-- The verification table below records the earlier 13 October successful run; this latest rerun note supersedes it for current-checkout status.
+- The verification table below records the earlier successful run. The current-checkout results in the presentation-readiness rerun above supersede it for present status.
 
 Local checks actually completed on **13 October 2026**:
 
@@ -107,7 +117,7 @@ The exact test mapping and execution limitations are in [test-execution.md](test
 ### GitHub
 
 - The local repo and feature branch preserve the original `main` history. The implementation and supporting documents are committed locally on `feature/mvp-exam-workflow`; see `git log` for exact hashes. No push, PR, merge, or remote configuration change has occurred.
-- A repository-linked GitHub Project was created after verifying the authenticated account owns the private repository and the repository Projects page had no existing project. Project: [Online Exam Portal — Software Engineering](https://github.com/users/chhavi2308-s/projects/1); repository association: [repository Projects tab](https://github.com/chhavi2308-s/online-exam-portal-se-miniproject/projects). It is private. Settings verified: Status = Backlog, Ready, In Progress, In Review, Done; Priority = P0–P3; numeric Story Points; Sprint iterations with official dates; custom Epic single-select with the five draft epics; repository is the default project repository. Project README and description were populated with the SRS-driven planning notes.
+- A repository-linked GitHub Project exists and is private: [Online Exam Portal — Software Engineering](https://github.com/users/chhavi2308-s/projects/1); repository association: [repository Projects tab](https://github.com/chhavi2308-s/online-exam-portal-se-miniproject/projects). Its configured fields include Status = Backlog, Ready, In Progress, In Review, Done; Priority = P0–P3; numeric Story Points; Sprint iterations; and custom Epic. The authenticated project main view was checked on 13 October and showed 0 matching items across all columns. Do not create duplicate issue records in GitHub; Jira is the authoritative backlog. Keep GitHub Project membership unchanged unless the owner explicitly approves invitations.
 - The GitHub connector currently resolves to a different account: it lists no repositories for `chhavi2308-s` and exposes an unrelated repository under another owner. Do not use it for this project until reconnected to the correct account. The browser-authenticated Chhavi account remains able to view the project and repository.
 - The local CI workflow is `.github/workflows/ci.yml` (`Node CI`), runs on PRs and pushes to `main`, installs with `npm ci`, runs tests and build, and grants `contents: read`. It has not run remotely.
 
@@ -166,7 +176,7 @@ Confirm or change this proposal as a team before assigning people in a tracker. 
 2. Confirm proposed task division and estimates with the four-person team; keep assignees empty until agreement and verified tracker identities.
 3. Keep Jira OEPSE authoritative. The private GitHub Project is empty and unshared; do not add people without explicit approval. Link code commits and PRs to Jira keys.
 4. Confirm all four teammates can access Jira OEPSE, then agree on issue ownership and capacity before assigning work or treating estimates as sprint commitments.
-5. Resolve the Windows `npm ci --offline` EPERM after ensuring no process is holding Rolldown's native module, then rerun clean install, tests and build.
+5. Close any PowerShell/VS Code terminals running this repository's Node/Vite/demo processes, then run `npm ci --no-audit --no-fund`, `npm test`, and `npm run build` from the repo directory. If `EPERM` persists, restart Windows and retry before opening the project. Do not delete the native module manually or stop unidentified processes.
 6. Review and commit the local feature-branch changes. Request separate approval before any push/PR/merge.
 7. Record Sprint 1 and Sprint 2 demos from the actual running product; upload only the real recordings as assignment requires.
 
