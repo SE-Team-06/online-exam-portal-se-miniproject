@@ -49,6 +49,7 @@ function App() {
   const [correctOptionId, setCorrectOptionId] = useState('a');
   const [questionMarks, setQuestionMarks] = useState(1);
   const [editingQuestionId, setEditingQuestionId] = useState('');
+  const [editingExamId, setEditingExamId] = useState('');
   const now = new Date();
   const [examDraft, setExamDraft] = useState({
     title: '', durationMinutes: 30, startAt: localDateTime(now),
@@ -207,21 +208,39 @@ setExams(refreshed.exams);
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
   }
-  async function createExam(event) {
-    event.preventDefault(); setError(''); setNotice(''); setBusy(true);
+  function resetExamForm() {
+    const createdAt = new Date();
+    setEditingExamId('');
+    setExamDraft({ title: '', durationMinutes: 30, startAt: localDateTime(createdAt), endAt: localDateTime(new Date(createdAt.getTime() + 60 * 60_000)), passMark: 1, negativeMark: 0, reviewEnabled: false });
+    setSelectedQuestionIds([]); setAssignedStudentIds([]);
+  }
+  function editExam(exam) {
+    setError(''); setNotice(''); setEditingExamId(exam.id);
+    setExamDraft({ title: exam.title, durationMinutes: exam.durationMinutes, startAt: localDateTime(new Date(exam.startAt)), endAt: localDateTime(new Date(exam.endAt)), passMark: exam.passMark, negativeMark: exam.negativeMark, reviewEnabled: exam.reviewEnabled });
+    setSelectedQuestionIds(exam.questionIds); setAssignedStudentIds(exam.assignedStudentIds);
+  }
+  async function saveExam(event) {
+    event.preventDefault(); setError(''); setNotice('');
+    if (!selectedQuestionIds.length) { setError('Select at least one question.'); return; }
+    const startAt = new Date(examDraft.startAt); const endAt = new Date(examDraft.endAt);
+    if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime()) || endAt <= startAt) { setError('Choose a valid exam window; the end must be after the start.'); return; }
+    const maximumScore = questions.filter((question) => selectedQuestionIds.includes(question.id)).reduce((total, question) => total + question.marks, 0);
+    if (Number(examDraft.passMark) > maximumScore) { setError('Pass mark cannot exceed the selected questions’ total marks.'); return; }
+    const isEditing = Boolean(editingExamId);
+    setBusy(true);
     try {
-      const data = await api('/exams', {
-        method: 'POST', csrf,
+      const data = await api(isEditing ? `/exams/${editingExamId}` : '/exams', {
+        method: isEditing ? 'PUT' : 'POST', csrf,
         body: {
           title: examDraft.title, durationMinutes: Number(examDraft.durationMinutes),
-          startAt: new Date(examDraft.startAt).toISOString(), endAt: new Date(examDraft.endAt).toISOString(),
+          startAt: startAt.toISOString(), endAt: endAt.toISOString(),
           passMark: Number(examDraft.passMark), negativeMark: Number(examDraft.negativeMark),
           questionIds: selectedQuestionIds, assignedStudentIds, reviewEnabled: examDraft.reviewEnabled,
         },
       });
-      setExams((current) => [...current, { ...examDraft, id: data.id, status: data.status }]);
-      setExamDraft((current) => ({ ...current, title: '' })); setSelectedQuestionIds([]); setAssignedStudentIds([]);
-      setNotice('Exam configured, published, and assigned to the selected students.');
+      setExams((current) => isEditing ? current.map((exam) => exam.id === data.id ? data : exam) : [data, ...current]);
+      resetExamForm();
+      setNotice(isEditing ? 'Exam settings updated.' : 'Exam configured, published, and assigned to the selected students.');
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
   }
@@ -254,9 +273,9 @@ setExams(refreshed.exams);
   )}
 </div>
 </article>) : <p className="empty">No exams are assigned to your account yet.</p>}</section></>
-      : <><section className="exam-list"><p className="eyebrow">INSTRUCTOR VIEW</p><h2>Your exams</h2>{exams.length ? exams.map((exam) => <article className="exam-card" key={exam.id}><div className="exam-icon">✦</div><div className="exam-info"><h3>{exam.title}</h3><p>{exam.durationMinutes} minutes · {exam.status}</p></div></article>) : <p className="empty">No exams created yet.</p>}</section>
+      : <><section className="exam-list"><p className="eyebrow">INSTRUCTOR VIEW</p><h2>Your exams</h2>{exams.length ? exams.map((exam) => <article className="exam-card" key={exam.id}><div className="exam-icon">✦</div><div className="exam-info"><h3>{exam.title}</h3><p>{exam.durationMinutes} minutes · {exam.status}</p></div><div className="question-actions"><button className="text-button" type="button" onClick={() => editExam(exam)} disabled={busy}>Edit</button></div></article>) : <p className="empty">No exams created yet.</p>}</section>
         <section className="management-grid"><section className="management-card"><p className="eyebrow">QUESTION BANK</p><h2>{editingQuestionId ? 'Edit multiple-choice question' : 'Add a multiple-choice question'}</h2><form className="management-form" onSubmit={createQuestion}><label>Question<input value={questionText} onChange={(event) => setQuestionText(event.target.value)} maxLength={2000} required/></label>{optionTexts.map((value, index) => <label key={index}>Option {index + 1}<input value={value} onChange={(event) => updateOptionText(index, event.target.value)} maxLength={500} required={index < 2}/></label>)}<label>Correct answer<select value={correctOptionId} onChange={(event) => setCorrectOptionId(event.target.value)}>{optionTexts.map((text, index) => text.trim() && <option key={optionIds[index]} value={optionIds[index]}>Option {index + 1}: {text}</option>)}</select></label><label>Marks<input type="number" min="1" max="100" value={questionMarks} onChange={(event) => setQuestionMarks(event.target.value)} required/></label><button className="primary" disabled={busy}>{editingQuestionId ? 'Save changes' : 'Save question'}</button>{editingQuestionId && <button className="text-button" type="button" onClick={resetQuestionForm} disabled={busy}>Cancel edit</button>}</form><h3 className="subheading">Your questions ({questions.length})</h3>{questions.length ? <ul className="management-list">{questions.map((question) => <li key={question.id}><strong>{question.text}</strong><small>{question.options.length} options · {question.marks} mark{question.marks === 1 ? '' : 's'}</small><div className="question-actions"><button className="text-button" type="button" onClick={() => editQuestion(question)} disabled={busy}>Edit</button><button className="text-button" type="button" onClick={() => deleteQuestion(question)} disabled={busy}>Delete</button></div></li>)}</ul> : <p className="empty">Add questions before configuring an exam.</p>}</section>
-          <section className="management-card"><p className="eyebrow">EXAM SETUP</p><h2>Configure and publish an exam</h2><form className="management-form" onSubmit={createExam}><label>Exam title<input value={examDraft.title} onChange={(event) => setExamDraft((current) => ({ ...current, title: event.target.value }))} maxLength={160} required/></label><label>Duration (minutes)<input type="number" min="1" max="600" value={examDraft.durationMinutes} onChange={(event) => setExamDraft((current) => ({ ...current, durationMinutes: event.target.value }))} required/></label><label>Opens<input type="datetime-local" value={examDraft.startAt} onChange={(event) => setExamDraft((current) => ({ ...current, startAt: event.target.value }))} required/></label><label>Closes<input type="datetime-local" value={examDraft.endAt} onChange={(event) => setExamDraft((current) => ({ ...current, endAt: event.target.value }))} required/></label><label>Pass mark<input type="number" min="0" step="0.5" value={examDraft.passMark} onChange={(event) => setExamDraft((current) => ({ ...current, passMark: event.target.value }))} required/></label><label>Negative mark per wrong answer<input type="number" min="0" max="100" step="0.25" value={examDraft.negativeMark} onChange={(event) => setExamDraft((current) => ({ ...current, negativeMark: event.target.value }))} required/></label><label className="check-label"><input type="checkbox" checked={examDraft.reviewEnabled} onChange={(event) => setExamDraft((current) => ({ ...current, reviewEnabled: event.target.checked }))}/> Allow answer review after exam closes</label><fieldset><legend>Questions</legend>{questions.map((question) => <label className="check-label" key={question.id}><input type="checkbox" checked={selectedQuestionIds.includes(question.id)} onChange={(event) => setSelectedQuestionIds((current) => event.target.checked ? [...current, question.id] : current.filter((id) => id !== question.id))}/>{question.text} ({question.marks} marks)</label>)}{!questions.length && <small>Create questions first.</small>}</fieldset><fieldset><legend>Assign students</legend>{students.map((student) => <label className="check-label" key={student.id}><input type="checkbox" checked={assignedStudentIds.includes(student.id)} onChange={(event) => setAssignedStudentIds((current) => event.target.checked ? [...current, student.id] : current.filter((id) => id !== student.id))}/>{student.name} · {student.email}</label>)}{!students.length && <small>No verified active student accounts are available.</small>}</fieldset><button className="primary" disabled={busy || !questions.length}>Configure and publish</button></form></section></section></>}
+          <section className="management-card"><p className="eyebrow">EXAM SETUP</p><h2>{editingExamId ? 'Edit exam configuration' : 'Configure and publish an exam'}</h2><form className="management-form" onSubmit={saveExam}><label>Exam title<input value={examDraft.title} onChange={(event) => setExamDraft((current) => ({ ...current, title: event.target.value }))} maxLength={160} required/></label><label>Duration (minutes)<input type="number" min="1" max="600" value={examDraft.durationMinutes} onChange={(event) => setExamDraft((current) => ({ ...current, durationMinutes: event.target.value }))} required/></label><label>Opens<input type="datetime-local" value={examDraft.startAt} onChange={(event) => setExamDraft((current) => ({ ...current, startAt: event.target.value }))} required/></label><label>Closes<input type="datetime-local" value={examDraft.endAt} onChange={(event) => setExamDraft((current) => ({ ...current, endAt: event.target.value }))} required/></label><label>Pass mark<input type="number" min="0" step="0.5" value={examDraft.passMark} onChange={(event) => setExamDraft((current) => ({ ...current, passMark: event.target.value }))} required/></label><label>Negative mark per wrong answer<input type="number" min="0" max="100" step="0.25" value={examDraft.negativeMark} onChange={(event) => setExamDraft((current) => ({ ...current, negativeMark: event.target.value }))} required/></label><label className="check-label"><input type="checkbox" checked={examDraft.reviewEnabled} onChange={(event) => setExamDraft((current) => ({ ...current, reviewEnabled: event.target.checked }))}/> Allow answer review after exam closes</label><fieldset><legend>Questions</legend>{questions.map((question) => <label className="check-label" key={question.id}><input type="checkbox" checked={selectedQuestionIds.includes(question.id)} onChange={(event) => setSelectedQuestionIds((current) => event.target.checked ? [...current, question.id] : current.filter((id) => id !== question.id))}/>{question.text} ({question.marks} marks)</label>)}{!questions.length && <small>Create questions first.</small>}</fieldset><fieldset><legend>Assign students</legend>{students.map((student) => <label className="check-label" key={student.id}><input type="checkbox" checked={assignedStudentIds.includes(student.id)} onChange={(event) => setAssignedStudentIds((current) => event.target.checked ? [...current, student.id] : current.filter((id) => id !== student.id))}/>{student.name} · {student.email}</label>)}{!students.length && <small>No verified active student accounts are available.</small>}</fieldset><div className="question-actions">{editingExamId && <button className="text-button" type="button" onClick={resetExamForm} disabled={busy}>Cancel</button>}<button className="primary" type="submit" disabled={busy || !questions.length || !selectedQuestionIds.length}>{editingExamId ? 'Save changes' : 'Configure and publish'}</button></div></form></section></section></>}
     <footer><span>Online Exam Portal</span><span>Software Engineering Mini-Project</span></footer></main></div>;
 }
 

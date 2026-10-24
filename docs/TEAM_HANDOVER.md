@@ -11,7 +11,7 @@ This handover describes the current local implementation and project setup. The 
 
 The project is a browser-based multiple-choice online examination portal with student, instructor, and administrator roles, as specified in the SRS. The canonical repository is [SE-Team-06/online-exam-portal-se-miniproject](https://github.com/SE-Team-06/online-exam-portal-se-miniproject).
 
-The implementation uses React and Vite for the web client, Node.js/Express for the API, MongoDB/Mongoose for data, and npm workspaces. PR #28 merged Chhavi's Sprint 1 work into `main` at `88c21bcf2d887fcc9f5381e509523592167142bb`; PR #30 merged the correct-answer validation fix at `17cdedda37b70f6f3b93f4b3c9a5b868505b2f8d`. PR #31 merged exam validation into `main` at `62b817f0151ab68e63a66055ae3ccdfcc2a0d6a9`. These refs were verified from fetched local refs on 24 October 2026. The separate question-management follow-up is on `feature/issue-4-question-management`, based on that PR #31 merge, and is not yet merged.
+The implementation uses React and Vite for the web client, Node.js/Express for the API, MongoDB/Mongoose for data, and npm workspaces. PR #28 merged Chhavi's Sprint 1 work into `main` at `88c21bcf2d887fcc9f5381e509523592167142bb`; PR #30 merged the correct-answer validation fix at `17cdedda37b70f6f3b93f4b3c9a5b868505b2f8d`. PR #31 merged exam validation into `main` at `62b817f0151ab68e63a66055ae3ccdfcc2a0d6a9`. These refs were verified from fetched local refs on 24 October 2026. The local branch `feature/issue-5-exam-lifecycle` is based on PR #31's merge. Its uncommitted Issue #5 changes cover exam configuration editing, ownership and input checks, and locking configuration after an attempt starts. Draft/publish lifecycle work is preserved separately and excluded from the focused diff; none of these local changes has been pushed or reviewed.
 
 ## What exists now
 
@@ -21,7 +21,7 @@ The implementation uses React and Vite for the web client, Node.js/Express for t
 - Instructor APIs to create MCQs and create, publish, and assign exams.
 - Student assigned-exam listing, one-attempt start/resume, answer saving/flagging, manual submission, server-side scoring, expiry auto-submit, and student-owned result lookup.
 - Focus-loss event endpoint with persisted timestamps and selected audit records.
-- React login, student exam flow/result view, instructor question-bank create/list view, and instructor exam configure/publish/assign view are in `main`. The current local `feature/issue-4-question-management` adds owner-scoped question edit/delete UI and API; questions referenced by exams are protected against changes/deletion. Exam editing and deletion remain unimplemented. An authenticated browser acceptance walkthrough has not been performed.
+- React login, student exam flow/result view, instructor question-bank create/list view, and instructor exam configure/publish/assign view are in the fetched `origin/main` history. The question edit/delete commit `5da5127bb9857e306aa893ff5314884c7537eb11` is an ancestor of fetched `origin/main` `f2ed5186eda44197104a30ae44cf2e6e3fd2e2e9`; it includes owner-scoped question edit/delete UI and API and protects questions referenced by exams. The focused uncommitted Issue #5 diff adds owner-scoped exam editing and locks schedule, assignments, questions, duration, scoring, and review settings after the first attempt. It validates question ownership and student assignments. Draft/publish lifecycle work is preserved outside this diff. Exam deletion is not required by the repository SRS and is not implemented. The supplied Issue #5 wording covers creating and locking exam configuration; no additional criteria are inferred. No browser acceptance walkthrough has been performed.
 - Temporary demo with disposable MongoDB, seeded instructor/student accounts, and one short sample exam.
 
 ### What was observed
@@ -68,12 +68,12 @@ Status meanings: `Complete` means the full requirement is implemented and verifi
 | Requirement group | Status | Evidence / remaining work |
 |---|---|---|
 | FR-OE-003/004 authentication and logout | Partial | Provisioned users and session flows exist; no user self-service lifecycle; full criteria need more tests. |
-| FR-OE-007/008/011 question/exam setup and assignment | Partial | API paths and validation tests exist; instructor authoring UI and full lifecycle are missing. |
+| FR-OE-007/008/011 question/exam setup and assignment | Partial | Instructor authoring UI and APIs exist; the focused local diff adds owner-scoped pre-attempt editing with post-attempt configuration locks. Automated tests cover these paths; the supplied Issue #5 wording covers creating and locking exam configuration; browser acceptance remains unverified. Draft/publish is preserved separately and excluded from this diff. |
 | FR-OE-013–020 assigned exam/attempt/save/submit | Partial | Core server paths exist; complete timer, autosave, confirmation and recovery acceptance remains. |
 | FR-OE-021 focus monitoring | Partial | API persists focus-loss timestamps; browser tracking and instructor report are absent. |
 | FR-OE-022/023 evaluation and result | Partial | Representative server scoring and student result path exist; release/review behavior is incomplete. |
 | FR-OE-001/002/005/006 registration, verification, reset, admin | Not started | No supported implementation identified. |
-| FR-OE-009/010/012 exam options/edit lock | Partial | Negative-score floor is unit-tested, but exam configuration is absent; shuffling and edit lock are not implemented. |
+| FR-OE-009/010/012 exam options/edit lock | Partial | Exam editing locks schedule, assignments, question selection, duration, scoring, and review settings after an attempt starts; question/option shuffling remains unimplemented (Issue #15). Optional negative marking is represented in the schema/API and instructor configuration, with scoring and persistence covered by automated tests; full OEPSE-13 / Issue #16 acceptance and end-to-end verification remain unverified. Full SRS and browser acceptance remain unverified. |
 | FR-OE-024/025/026/027 analytics, export, notices, audit UI | Partial | Selected audit events exist; analytics/export/notifications/admin audit UI are not implemented. |
 | NFR-OE-001–009, 011, 013–014 | Not started | No complete performance, availability, recovery, accessibility, compatibility, scale, portability, or retention acceptance evidence. |
 | NFR-OE-010, NFR-OE-012 | Partial | Server time is used for attempt deadlines, but displayed-clock tolerance is not measured; modular source and tests exist, but 70% business-logic coverage is not measured. |
@@ -115,7 +115,7 @@ The exact test mapping and execution limitations are in [test-execution.md](test
 
 ## Current Git verification — 24 October 2026
 
-- Fetched `origin/main` is `62b817f0151ab68e63a66055ae3ccdfcc2a0d6a9`, the PR #31 merge commit. PR #28, PR #30, and PR #31 are in its ancestry. The current question-management branch is based directly on this `origin/main`.
+- The earlier fetched `origin/main` was PR #31 merge `62b817f0151ab68e63a66055ae3ccdfcc2a0d6a9`. A later authenticated fetch advanced `origin/main` to `f2ed5186eda44197104a30ae44cf2e6e3fd2e2e9` (PR #33 merge); PRs #28, #30, and #31 and question-management commit `5da5127bb9857e306aa893ff5314884c7537eb11` are in its ancestry. The current `feature/issue-5-exam-lifecycle` worktree is based on that question-management commit and has uncommitted changes.
 - A fresh GitHub Actions run, current Jira statuses, and current Project board fields/access were not independently checked in this verification. The Jira and Project details below are dated historical snapshots and must not be treated as current without a live readback.
 - The official Part 2 PDF was not present in the repository file listing; the supplied local PDF path was unavailable to this session. Assignment requirements beyond the repository's own documentation therefore remain unverified here.
 
