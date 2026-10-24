@@ -19,6 +19,11 @@ describe('correct answer selection', () => {
     assert.equal(reconcileCorrectOptionId(['First', 'Second', 'Third', ''], 'a'), 'a');
   });
 
+  it('preserves existing option IDs while editing a question', () => {
+    assert.equal(reconcileCorrectOptionId(['First', 'Second', ''], 'answer-2', ['answer-1', 'answer-2', 'answer-3']), 'answer-2');
+    assert.equal(reconcileCorrectOptionId(['First', '', ''], 'answer-2', ['answer-1', 'answer-2', 'answer-3']), 'answer-1');
+  });
+
   it('leaves no selection when every option is empty', () => {
     assert.equal(reconcileCorrectOptionId(['', '', '', ''], 'a'), '');
   });
