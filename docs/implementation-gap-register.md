@@ -1,6 +1,6 @@
 # Implementation and requirement gap register
 
-Assessment date: 13 October 2026. Source of requirement IDs: submitted SRS v1.2 and `SRS/ID_Cheat_Sheet.md`. This register describes the local MVP slice only. A partial implementation is not acceptance of the complete SRS requirement.
+Assessment date: 24 October 2026. Source of requirement IDs: submitted SRS v1.2 and `SRS/ID_Cheat_Sheet.md`. This register describes the local MVP slice only. A partial implementation is not acceptance of the complete SRS requirement.
 
 ## Evidence reviewed
 
@@ -21,7 +21,7 @@ Assessment date: 13 October 2026. Source of requirement IDs: submitted SRS v1.2 
 | SEC-OE-008 | Request validation, CSRF token and origin checks are present; tests cover malformed question and missing CSRF | Full OWASP coverage, sanitization and systematic injection/XSS testing remain |
 | SEC-OE-009 | Attempt and result access are scoped to the authenticated student; tests cover unassigned start and cross-user result denial | Full boundary/grace-period matrix and concurrent edge cases remain |
 | SEC-OE-010 | Login limiter configured for 10 requests per IP per 60 seconds | Automated 429/window/IP behavior test is still needed; password-reset route does not exist |
-| FR-OE-007, FR-OE-008, FR-OE-011 | Instructor question creation and exam creation/publishing/assignment APIs | No complete instructor authoring UI; question editing/deletion and lifecycle controls are incomplete |
+| FR-OE-007, FR-OE-008, FR-OE-011 | On `main` after PRs #28 and #30: instructor question create/list UI, exam configuration/publish/assignment UI, instructor-owned API routes, role checks, option/correct-answer validation. Current automated tests cover those API paths and roster assignment validation. | UI supports adding/listing MCQs and configuring/publishing/assigning exams. Editing/deleting questions or exams, draft/release lifecycle controls, and authenticated browser acceptance remain incomplete/unverified. The live issue #4/#5 acceptance criteria could not be re-read in this environment. |
 | FR-OE-013, FR-OE-014 | Assigned exam list and one-attempt start constraints; integration test | All status/time-window cases and UI usability are not fully tested |
 | FR-OE-015, FR-OE-017, FR-OE-018 | Answer/flag persistence, server-side save and resume path in API | Autosave timing/30-second interval and interrupted-browser behavior need verification |
 | FR-OE-016, NFR-OE-010 | Server derives attempt end time and expiry worker auto-submits expired attempts | Displayed timer drift (≤2 seconds), clock skew and browser lifecycle remain unverified |
@@ -49,7 +49,16 @@ Assessment date: 13 October 2026. Source of requirement IDs: submitted SRS v1.2 
 
 ## Assignment-document alignment and risks
 
+- **PR #28 and #30 merge, verified from fetched refs 24 October:** PR #28 is included at `88c21bcf2d887fcc9f5381e509523592167142bb`; PR #30's correct-answer fix is included at current `origin/main` merge `17cdedda37b70f6f3b93f4b3c9a5b868505b2f8d`. Current tests cover question-list/exam payload answer-key redaction, instructor authorization and ownership, exam persistence, and student assignment. Passing tests/build do not establish browser usability or full SRS acceptance.
+
 - The repository contains the SRS v1.2, SAD v1.4, STP v1.1, RTM workbook, STRIDE workbook, and three sequence diagrams. The implementation is a MERN slice; API/design conformance has not been established end to end.
 - The test execution log below reports only tests actually run against this MVP, not completed execution of the submitted STP. Test-to-requirement mappings are corrected to match what each test exercises.
 - SRS v1.2 and SAD v1.4 show a related-document version mismatch. The SAD API-07/API-08 presentation also needs review against implemented routes. Preserve the approved documents until the team decides whether to revise them.
 - Temporary demo data and generated passwords are disposable. Do not use real identities or credentials.
+
+
+## Follow-up validation evidence — 24 October 2026
+
+- PR #30 merged the optional-answer selection fix into `main`; its merged UI tests cover preserving a valid selected option and fallback behavior when an option is cleared.
+- On local branch `feature/issue-4-5-authoring-validation` based on `origin/main` at `17cdedda37b70f6f3b93f4b3c9a5b868505b2f8d`, API tests reject an end-before-start schedule, duplicate question selection, and assignment to an unverified student. `npm.cmd test` passed 24/24; `npm.cmd --workspace server run check`, Vite build with `--configLoader native`, and `git diff --check` passed. The follow-up is not yet published. No browser walkthrough or live issue-criteria check was possible.
+- The official Part 2 PDF was not found in the repository, and the provided local PDF path was unavailable in this session. No new Part 2 completion claim is made from that document.
