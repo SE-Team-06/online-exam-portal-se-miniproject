@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
@@ -134,6 +134,32 @@ app.post('/api/exams/:examId/attempts', authenticate, requireRole('Student'), re
     return res.status(201).json({ attempt: { id: attempt.id, examId: exam.id, endsAt: attempt.endsAt, status: attempt.status, answers: attempt.answers }, questions: await safeQuestions(exam.questionIds) });
   } catch (e) { next(e); }
 });
+app.get('/api/attempts/mine', authenticate, requireRole('Student'), async (req, res, next) => {
+  try {
+    const attempts = await Attempt.find({
+      studentId: req.user._id,
+      status: 'SUBMITTED',
+    }).sort({ submittedAt: -1 });
+
+    const results = await Promise.all(
+      attempts.map(async (attempt) => {
+        const exam = await Exam.findById(attempt.examId);
+
+        if (!exam) return null;
+
+        return {
+          ...resultView(attempt, exam),
+          examId: exam.id,
+          examTitle: exam.title,
+        };
+      })
+    );
+
+    res.json({ results: results.filter(Boolean) });
+  } catch (e) {
+    next(e);
+  }
+});
 app.get('/api/attempts/:attemptId', authenticate, requireRole('Student'), async (req, res, next) => {
   try {
     const attempt = await Attempt.findOne({ _id: req.params.attemptId, studentId: req.user._id });
@@ -168,6 +194,9 @@ app.post('/api/attempts/:attemptId/focus-loss', authenticate, requireRole('Stude
 app.post('/api/attempts/:attemptId/submit', authenticate, requireRole('Student'), requireCsrf, async (req, res, next) => {
   try { const attempt = await Attempt.findOne({ _id: req.params.attemptId, studentId: req.user._id, status: 'IN_PROGRESS' }); if (!attempt) return sendError(res, 404, 'ATTEMPT_NOT_FOUND', 'Active attempt not found.'); const exam = await Exam.findById(attempt.examId); await finishAttempt(attempt, exam, req); res.json({ attempt: resultView(attempt, exam) }); } catch (e) { next(e); }
 });
+
+
+
 app.get('/api/attempts/:attemptId/result', authenticate, async (req, res, next) => {
   try {
     let attempt;
@@ -184,6 +213,63 @@ app.get('/api/attempts/:attemptId/result', authenticate, async (req, res, next) 
     res.json({ attempt: resultView(attempt, exam) });
   } catch (e) { next(e); }
 });
+
+app.get('/api/attempts/:attemptId/review', authenticate, requireRole('Student'), async (req, res, next) => {
+  try {
+    if (!objectId.safeParse(req.params.attemptId).success) {
+      return sendError(res, 400, 'INVALID_ID', 'Invalid attempt identifier.');
+    }
+
+    const attempt = await Attempt.findOne({
+      _id: req.params.attemptId,
+      studentId: req.user._id,
+      status: 'SUBMITTED',
+    });
+
+    if (!attempt) {
+      return sendError(res, 404, 'ATTEMPT_NOT_FOUND', 'Submitted attempt not found.');
+    }
+
+    const exam = await Exam.findById(attempt.examId);
+
+    if (!exam || !exam.reviewEnabled || new Date() < exam.endAt) {
+      return sendError(res, 403, 'REVIEW_NOT_AVAILABLE', 'Answer review is not available.');
+    }
+
+    const questions = await Question.find({
+      _id: { $in: exam.questionIds },
+    }).select('+correctOptionId');
+
+    const review = exam.questionIds.map((questionId) => {
+      const question = questions.find(
+        (item) => String(item._id) === String(questionId)
+      );
+
+      if (!question) return null;
+
+      const answer = attempt.answers.find(
+        (item) => String(item.questionId) === String(questionId)
+      );
+
+      return {
+        questionId: String(question._id),
+        text: question.text,
+        marks: question.marks,
+        options: question.options.map((option) => ({
+          id: option._id,
+          text: option.text,
+        })),
+        selectedOptionId: answer?.selectedOptionId ?? null,
+        correctOptionId: question.correctOptionId,
+      };
+    });
+
+    res.json({ review: review.filter(Boolean) });
+  } catch (e) {
+    next(e);
+  }
+});
+
 app.use((_req, res) => sendError(res, 404, 'NOT_FOUND', 'The requested resource was not found.'));
 app.use((err, _req, res, _next) => {
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) return sendError(res, 400, 'INVALID_JSON', 'Request body must be valid JSON.');
