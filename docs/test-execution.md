@@ -1,12 +1,17 @@
 # Local test execution record
 
-## Chhavi Sprint 1 issues — 24 October 2026
+## Current verification — 24 October 2026
 
-- Branch: `feature/chhavi-sprint1-issues`, based on the last locally available `main-author-fix` commit. The issue/API/UI work is local pending changes; it has not been pushed, reviewed, or merged.
-- `npm.cmd test`: **15 passed, 0 failed, 0 skipped** (12 workflow integration cases and 3 scoring cases). Added coverage verifies login role and logout invalidation, question listing without correct-answer leakage, instructor-only question/student endpoints, student-list data minimization, and exam configuration/publishing with schedule, scoring, question, and assignment values persisted.
-- `npm.cmd run build`: **passed**. Server syntax checks passed; Vite transformed 15 modules and produced JS 232.97 kB (72.42 kB gzip) and CSS 6.65 kB (2.05 kB gzip).
-- `git diff --check`: passed. LF-to-CRLF Git warnings on the changed UI/API files are line-ending notices, not whitespace errors.
-- No authenticated browser walkthrough, owner review/merge, or fresh Actions run was verified. One feature-branch push attempt on 24 October failed because this environment could not connect to `github.com:443`; no PR exists from this branch. The #2 login/role path is API-tested; #4 question authoring and #5 exam configuration have not yet had a manual UI walkthrough. Question/exam editing and deletion remain outside this slice.
+- Fetched refs show PR #28 merged to `main` by merge commit `88c21bcf2d887fcc9f5381e509523592167142bb` (`Merge pull request #28 from SE-Team-06/feature/chhavi-sprint1-issues`). Its second parent is feature tip `9973c2df08a493ecfa2115723da4fa410796b797`; implementation commit `a251df3222933dda8b2891345fdb18c1e9f00656` and that feature tip are ancestors of `origin/main`. This verifies repository history, not the current live Actions result.
+- On an isolated local branch `fix/question-correct-option-selection` based on that fetched `origin/main`, a small UI validation fix now reconciles the selected correct answer when an optional option is cleared. This follow-up branch is local and has not been pushed or opened as a PR.
+- `npm.cmd test`: **22 passed, 0 failed, 0 skipped** (12 API workflow tests, 3 scoring tests, and 7 client regression tests).
+- `npm.cmd run build`: the default config bundler hit `EPERM` attempting to write a temporary file through the read-only shared `node_modules` junction. The build itself passed with `npm.cmd --workspace server run check` and `npm.cmd --workspace client run build -- --configLoader native`; Vite transformed 16 modules and produced JS 233.36 kB (72.51 kB gzip) and CSS 6.65 kB (2.05 kB gzip).
+- `git diff --check`: passed. No authenticated browser walkthrough or fresh Actions run was verified. The #2 login/role path is API-tested; #4 question authoring and #5 exam configuration still need manual UI acceptance. Question/exam editing and deletion remain outside this slice.
+
+## Earlier local verification — 24 October 2026 (before PR #28 merge was verified)
+
+- `feature/chhavi-sprint1-issues` was pushed and later merged as PR #28; see the current verification above. The original statements that the branch was pending/unpushed are superseded by the fetched merge commit evidence.
+- At that earlier point, `npm.cmd test` passed 15 tests and `npm.cmd run build` passed. Those results are historical and are superseded by the current 22-test run above.
 
 ## Presentation-readiness verification — 13 October 2026 (historical baseline)
 

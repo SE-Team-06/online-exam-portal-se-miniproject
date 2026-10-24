@@ -11,7 +11,7 @@ This handover describes the current local implementation and project setup. The 
 
 The project is a browser-based multiple-choice online examination portal with student, instructor, and administrator roles, as specified in the SRS. The canonical repository is [SE-Team-06/online-exam-portal-se-miniproject](https://github.com/SE-Team-06/online-exam-portal-se-miniproject).
 
-The implementation uses React and Vite for the web client, Node.js/Express for the API, MongoDB/Mongoose for data, and npm workspaces. On 24 October, Chhavi's Sprint 1 work is isolated on `feature/chhavi-sprint1-issues`, based on locally fetched `main` commit `6a6a1d0007a5322c456b2c142f196c3dfa4fdd71`. The branch is not pushed, reviewed, or merged. Existing main history is unchanged. Use focused feature branches and owner-reviewed PRs for integration.
+The implementation uses React and Vite for the web client, Node.js/Express for the API, MongoDB/Mongoose for data, and npm workspaces. PR #28 merged Chhavi's Sprint 1 work into `main`; the fetched merge commit is `88c21bcf2d887fcc9f5381e509523592167142bb`, whose second parent is feature tip `9973c2df08a493ecfa2115723da4fa410796b797`. The follow-up optional-answer validation fix is on a separate local branch and is not pushed or reviewed. These Git facts were verified from fetched refs on 24 October 2026. Use focused feature branches and owner-reviewed PRs for integration.
 
 ## What exists now
 
@@ -21,13 +21,13 @@ The implementation uses React and Vite for the web client, Node.js/Express for t
 - Instructor APIs to create MCQs and create, publish, and assign exams.
 - Student assigned-exam listing, one-attempt start/resume, answer saving/flagging, manual submission, server-side scoring, expiry auto-submit, and student-owned result lookup.
 - Focus-loss event endpoint with persisted timestamps and selected audit records.
-- React login, student exam flow/result view, instructor question-bank create/list view, and instructor exam configure/publish/assign view. Question/exam editing and deletion are not implemented. Chhavi's issue changes have not yet had a manual authenticated browser walkthrough or PR review.
+- React login, student exam flow/result view, instructor question-bank create/list view, and instructor exam configure/publish/assign view. Question/exam editing and deletion are not implemented. PR #28 is merged; the merged UI has not had a separately verified authenticated browser acceptance walkthrough.
 - Temporary demo with disposable MongoDB, seeded instructor/student accounts, and one short sample exam.
 
 ### What was observed
 
 - **User-reported manual check:** Chhavi opened the local demo, logged in as the instructor, and saw a subject. No additional manual feature verification is implied.
-- **Automated verification on 24 October:** `npm.cmd test` passed 15/15 and `npm.cmd run build` passed on `feature/chhavi-sprint1-issues`; details are in [test execution](test-execution.md). These results do not replace an authenticated browser walkthrough or PR review.
+- **Automated verification on 24 October:** after PR #28 merged, `npm.cmd test` passed 22/22; the default build command hit an EPERM while writing a temporary config file through a shared dependency junction, but the server check and Vite build passed using the native config loader; details are in [test execution](test-execution.md). These results do not replace an authenticated browser acceptance walkthrough. The follow-up fix is not pushed.
 - **Locally verified smoke check on 13 October 2026:** `npm run demo` started the API and Vite; `/api/health` returned HTTP 200 with `{"status":"ok"}` and `/` returned HTTP 200. The service was stopped afterward.
 - The local automated tests and build results are in [test-execution.md](test-execution.md). The updated RTM is [RTM_Online_Exam_Portal.xlsx](../SRS/RTM_Online_Exam_Portal.xlsx); its `Implementation Evidence` sheet records 53 requirement statuses with local evidence/gaps. No complete SRS requirement is marked complete merely because a partial path exists.
 
@@ -36,7 +36,7 @@ The implementation uses React and Vite for the web client, Node.js/Express for t
 Requirements: Windows PowerShell, Node.js 22.12 or newer, and npm.
 
 ```powershell
-git clone https://github.com/chhavi2308-s/online-exam-portal-se-miniproject.git
+git clone https://github.com/SE-Team-06/online-exam-portal-se-miniproject.git
 cd online-exam-portal-se-miniproject
 npm.cmd ci
 npm.cmd test
@@ -112,6 +112,12 @@ Local checks actually completed on **13 October 2026**:
 | `npm run demo` smoke | Passed as described above; app processes were stopped after check. |
 
 The exact test mapping and execution limitations are in [test-execution.md](test-execution.md). These tests are implementation tests, not retroactive execution of the submitted STP. No load, accessibility, browser-matrix, production TLS, or backup tests are claimed.
+
+## Current Git verification — 24 October 2026
+
+- Fetched `origin/main` is `88c21bcf2d887fcc9f5381e509523592167142bb`, the PR #28 merge commit. The merged feature tip and implementation commit are ancestors of this ref. The local follow-up branch `fix/question-correct-option-selection` is based on that ref and is not published.
+- A fresh GitHub Actions run, current Jira statuses, and current Project board fields/access were not independently checked in this verification. The Jira and Project details below are dated historical snapshots and must not be treated as current without a live readback.
+- The official Part 2 PDF was not present in the repository file listing; the supplied local PDF path was unavailable to this session. Assignment requirements beyond the repository's own documentation therefore remain unverified here.
 
 ## Project management status
 
