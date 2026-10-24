@@ -52,6 +52,18 @@ const questionInput = z.object({ text: z.string().trim().min(1).max(2000), optio
 app.post('/api/questions', authenticate, requireRole('Instructor', 'Administrator'), requireCsrf, async (req, res, next) => {
   try { const p = questionInput.safeParse(req.body); if (!p.success) return bad(res, p.error.issues); const question = await Question.create({ ...p.data, options: p.data.options.map(({ id, text }) => ({ _id: id, text })), ownerId: req.user._id }); await writeAudit(req, 'QUESTION_CREATED', { questionId: question.id }); res.status(201).json({ id: question.id, text: question.text, options: question.options.map((o) => ({ id: o._id, text: o.text })), marks: question.marks }); } catch (e) { next(e); }
 });
+app.get('/api/questions', authenticate, requireRole('Instructor', 'Administrator'), async (req, res, next) => {
+  try {
+    const questions = await Question.find({ ownerId: req.user._id }).sort({ createdAt: -1 });
+    res.json({ questions: questions.map((q) => ({ id: q.id, text: q.text, options: q.options.map((o) => ({ id: o._id, text: o.text })), marks: q.marks })) });
+  } catch (e) { next(e); }
+});
+app.get('/api/students', authenticate, requireRole('Instructor', 'Administrator'), async (_req, res, next) => {
+  try {
+    const students = await User.find({ role: 'Student', active: true, emailVerified: true }).sort({ name: 1 });
+    res.json({ students: students.map((student) => ({ id: student.id, name: student.name, email: student.email })) });
+  } catch (e) { next(e); }
+});
 const examInput = z.object({ title: z.string().trim().min(1).max(160), durationMinutes: z.number().int().min(1).max(600), startAt: z.string().datetime(), endAt: z.string().datetime(), passMark: z.number().min(0), negativeMark: z.number().min(0).max(100).default(0), questionIds: z.array(objectId).min(1), assignedStudentIds: z.array(objectId).default([]), reviewEnabled: z.boolean().default(false) }).refine((e) => new Date(e.endAt) > new Date(e.startAt), 'Exam end must be after start.');
 app.post('/api/exams', authenticate, requireRole('Instructor', 'Administrator'), requireCsrf, async (req, res, next) => {
   try {

@@ -9,9 +9,9 @@ This handover describes the current local implementation and project setup. The 
 
 ## Project and repository
 
-The project is a browser-based multiple-choice online examination portal with student, instructor, and administrator roles, as specified in the SRS. The repository is [online-exam-portal-se-miniproject](https://github.com/chhavi2308-s/online-exam-portal-se-miniproject).
+The project is a browser-based multiple-choice online examination portal with student, instructor, and administrator roles, as specified in the SRS. The canonical repository is [SE-Team-06/online-exam-portal-se-miniproject](https://github.com/SE-Team-06/online-exam-portal-se-miniproject).
 
-The implementation uses React and Vite for the web client, Node.js/Express for the API, MongoDB/Mongoose for data, and npm workspaces. The local branch is `feature/mvp-exam-workflow`, based on the original `main` history at `a83639eed69e604d3b13413b131075b489c7569c`. There have been no pushes or merges. Use `main` for reviewed stable code and focused `feature/`, `fix/`, or `docs/` branches for work.
+The implementation uses React and Vite for the web client, Node.js/Express for the API, MongoDB/Mongoose for data, and npm workspaces. On 24 October, Chhavi's Sprint 1 work is isolated on `feature/chhavi-sprint1-issues`, based on locally fetched `main` commit `6a6a1d0007a5322c456b2c142f196c3dfa4fdd71`. The branch is not pushed, reviewed, or merged. Existing main history is unchanged. Use focused feature branches and owner-reviewed PRs for integration.
 
 ## What exists now
 
@@ -21,12 +21,13 @@ The implementation uses React and Vite for the web client, Node.js/Express for t
 - Instructor APIs to create MCQs and create, publish, and assign exams.
 - Student assigned-exam listing, one-attempt start/resume, answer saving/flagging, manual submission, server-side scoring, expiry auto-submit, and student-owned result lookup.
 - Focus-loss event endpoint with persisted timestamps and selected audit records.
-- React login, student exam flow/result view, and an instructor exam-list view. There is not a complete instructor authoring UI.
+- React login, student exam flow/result view, instructor question-bank create/list view, and instructor exam configure/publish/assign view. Question/exam editing and deletion are not implemented. Chhavi's issue changes have not yet had a manual authenticated browser walkthrough or PR review.
 - Temporary demo with disposable MongoDB, seeded instructor/student accounts, and one short sample exam.
 
 ### What was observed
 
 - **User-reported manual check:** Chhavi opened the local demo, logged in as the instructor, and saw a subject. No additional manual feature verification is implied.
+- **Automated verification on 24 October:** `npm.cmd test` passed 15/15 and `npm.cmd run build` passed on `feature/chhavi-sprint1-issues`; details are in [test execution](test-execution.md). These results do not replace an authenticated browser walkthrough or PR review.
 - **Locally verified smoke check on 13 October 2026:** `npm run demo` started the API and Vite; `/api/health` returned HTTP 200 with `{"status":"ok"}` and `/` returned HTTP 200. The service was stopped afterward.
 - The local automated tests and build results are in [test-execution.md](test-execution.md). The updated RTM is [RTM_Online_Exam_Portal.xlsx](../SRS/RTM_Online_Exam_Portal.xlsx); its `Implementation Evidence` sheet records 53 requirement statuses with local evidence/gaps. No complete SRS requirement is marked complete merely because a partial path exists.
 
