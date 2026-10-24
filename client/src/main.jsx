@@ -378,7 +378,7 @@ function App() {
                         onClick={() => begin(exam)}
                         disabled={busy}
                       >
-                        Start exam →
+                        {exam.canResume ? 'Continue exam →' : 'Start exam →'}
                       </button>
                     )}
                   </div>

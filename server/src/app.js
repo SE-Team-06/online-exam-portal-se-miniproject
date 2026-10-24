@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
@@ -109,15 +109,17 @@ app.get('/api/exams', authenticate, async (req, res, next) => {
 
         let studentStatus;
 
-        if (attempt) {
-          studentStatus = 'Attempted';
-        } else if (now < e.startAt) {
-          studentStatus = 'Upcoming';
-        } else if (now < e.endAt) {
-          studentStatus = 'Open';
-        } else {
-          studentStatus = 'Missed';
-        }
+        if (attempt?.status === 'IN_PROGRESS' && attempt.endsAt > now) {
+  studentStatus = 'Open';
+} else if (attempt) {
+  studentStatus = 'Attempted';
+} else if (now < e.startAt) {
+  studentStatus = 'Upcoming';
+} else if (now < e.endAt) {
+  studentStatus = 'Open';
+} else {
+  studentStatus = 'Missed';
+}
 
         return {
           id: e.id,
@@ -127,6 +129,11 @@ app.get('/api/exams', authenticate, async (req, res, next) => {
           durationMinutes: e.durationMinutes,
           status: e.status,
           studentStatus,
+          canResume:
+  attempt?.status === 'IN_PROGRESS' &&
+  attempt.endsAt > now &&
+  now < e.endAt,
+
         };
       }),
     });
