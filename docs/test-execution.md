@@ -1,17 +1,34 @@
 # Local test execution record
 
-## Current verification — 24 October 2026
+## Issue #5 focused configuration checks — 24 October 2026 (latest rerun)
+
+- Branch: `feature/issue-5-exam-lifecycle`, based on local `5da5127bb9857e306aa893ff5314884c7537eb11` (parent `62b817f0151ab68e63a66055ae3ccdfcc2a0d6a9`). The worktree contains uncommitted changes; no push or PR was made. The initial fetch attempt failed with `SEC_E_NO_CREDENTIALS` at that time; the later successful fetch is recorded below.
+- `npm.cmd test`: **32 passed, 0 failed, 0 skipped** (24 server tests: 21 workflow and 3 scoring; 8 client tests).
+- `npm.cmd run build`: passed; server syntax checks and Vite production build passed using installed dependencies.
+- `git diff --check`: passed. Git emitted only LF-to-CRLF working-copy warnings for modified text files.
+- Focused tests cover exam creation/configuration persistence, owner-only editing, foreign-question and student-assignment validation, schedule boundaries, and configuration locks after an attempt starts. Draft/publish lifecycle and malformed publish-ID coverage are preserved in the pre-scope-split recovery patch, outside this focused diff. No browser walkthrough was performed; live GitHub Actions status remains unverified.
+
+### Preserved separate work
+
+- The pre-scope-split recovery patch at `C:\Users\hp\Documents\Codex\2026-10-13\th\issue-5-pre-scope-split.patch` preserves the previous combined local state, including draft/publish lifecycle code and its tests. It is a recovery snapshot, not part of the focused Issue #5 diff.
+
+### Later Git verification — 24 October 2026
+
+- A later authenticated fetch succeeded and updated `origin/main` to `f2ed5186eda44197104a30ae44cf2e6e3fd2e2e9` (merge commit for PR #33). The Issue #4 question-management commit `5da5127bb9857e306aa893ff5314884c7537eb11` is an ancestor of this fetched `origin/main` (the ancestry check returned exit code 0).
+- This later fetch does not change the earlier test-run note above: that fetch attempt had failed at the time. The issue description supplied for this review says the card covers exam configuration creation and locking; no additional criteria are inferred. The live GitHub page and browser acceptance remain unverified.
+
+## Earlier fetched implementation verification — 24 October 2026 (PR #31 ref)
 
 - Fetched refs show PR #28 merged to `main` at `88c21bcf2d887fcc9f5381e509523592167142bb`, PR #30 at `17cdedda37b70f6f3b93f4b3c9a5b868505b2f8d`, and PR #31 at `62b817f0151ab68e63a66055ae3ccdfcc2a0d6a9`.
-- On local branch `feature/issue-4-question-management` based on PR #31's merge commit, the instructor question bank has edit/delete UI and owner-scoped API routes. Edits require a valid MCQ; questions referenced by an exam cannot be changed or deleted. Malformed JSON receives a safe 400 response.
+- At that point, local commit `5da5127bb9857e306aa893ff5314884c7537eb11` added question edit/delete UI and owner-scoped API routes. A later fetch recorded above verified this commit as an ancestor of `origin/main` at `f2ed5186eda44197104a30ae44cf2e6e3fd2e2e9`.
 - `npm.cmd test`: **28 passed, 0 failed, 0 skipped** (17 API workflow tests, 3 scoring tests, and 8 client tests). Note: the final run took about 250 seconds because the login lockout test performs repeated password hashing.
 - `npm.cmd --workspace server run check`: passed. The Vite production build with `--configLoader native` passed; Vite transformed 16 modules and produced JS 234.59 kB (72.90 kB gzip) and CSS 6.65 kB (2.05 kB gzip).
-- `git diff --check`: passed. No authenticated browser walkthrough or fresh Actions run was verified. The question-management follow-up is not yet merged.
+- `git diff --check`: passed. No authenticated browser walkthrough or fresh Actions run was verified at that point.
 
 ## Earlier local verification — 24 October 2026 (before PR #28 merge was verified)
 
 - `feature/chhavi-sprint1-issues` was pushed and later merged as PR #28; see the current verification above. The original statements that the branch was pending/unpushed are superseded by the fetched merge commit evidence.
-- At that earlier point, `npm.cmd test` passed 15 tests and `npm.cmd run build` passed. Those results are historical and are superseded by the current 22-test run above.
+- At that earlier point, `npm.cmd test` passed 15 tests and `npm.cmd run build` passed. Those results are historical and are superseded by the later runs recorded above.
 
 ## Presentation-readiness verification — 13 October 2026 (historical baseline)
 

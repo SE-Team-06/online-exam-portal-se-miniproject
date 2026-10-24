@@ -93,7 +93,8 @@ app.get('/api/students', authenticate, requireRole('Instructor', 'Administrator'
 });
 const examInput = z.object({ title: z.string().trim().min(1).max(160), durationMinutes: z.number().int().min(1).max(600), startAt: z.string().datetime(), endAt: z.string().datetime(), passMark: z.number().min(0), negativeMark: z.number().min(0).max(100).default(0), questionIds: z.array(objectId).min(1), assignedStudentIds: z.array(objectId).default([]), reviewEnabled: z.boolean().default(false) })
   .refine((e) => new Date(e.endAt) > new Date(e.startAt), 'Exam end must be after start.')
-  .refine((e) => new Set(e.questionIds).size === e.questionIds.length, 'Exam questions must be unique.');
+  .refine((e) => new Set(e.questionIds).size === e.questionIds.length, 'Exam questions must be unique.')
+  .refine((e) => new Set(e.assignedStudentIds).size === e.assignedStudentIds.length, 'Student assignments must be unique.');
 app.post('/api/exams', authenticate, requireRole('Instructor', 'Administrator'), requireCsrf, async (req, res, next) => {
   try {
     const p = examInput.safeParse(req.body); if (!p.success) return bad(res, p.error.issues);
@@ -105,7 +106,34 @@ app.post('/api/exams', authenticate, requireRole('Instructor', 'Administrator'),
     if (fields.passMark > questions.reduce((s, q) => s + q.marks, 0)) return sendError(res, 400, 'INVALID_PASS_MARK', 'Pass mark cannot exceed the maximum score.');
     const exam = await Exam.create({ ...fields, ownerId: req.user._id, questionIds, assignedStudentIds, status: 'Published' });
     await writeAudit(req, 'EXAM_PUBLISHED', { examId: exam.id });
-    res.status(201).json({ id: exam.id, title: exam.title, status: exam.status });
+    res.status(201).json(examView(exam, true));
+  } catch (e) { next(e); }
+});
+app.put('/api/exams/:examId', authenticate, requireRole('Instructor', 'Administrator'), requireCsrf, async (req, res, next) => {
+  try {
+    if (!objectId.safeParse(req.params.examId).success) return sendError(res, 400, 'INVALID_ID', 'Invalid exam identifier.');
+    const p = examInput.safeParse(req.body); if (!p.success) return bad(res, p.error.issues);
+    const exam = await Exam.findOne({ _id: req.params.examId, ownerId: req.user._id });
+    if (!exam) return sendError(res, 404, 'EXAM_NOT_FOUND', 'Exam not found.');
+    const { questionIds, assignedStudentIds, ...fields } = p.data;
+    const questions = await Question.find({ _id: { $in: questionIds }, ownerId: req.user._id });
+    if (questions.length !== questionIds.length) return sendError(res, 400, 'INVALID_QUESTIONS', 'Every question must exist and belong to you.');
+    const students = assignedStudentIds.length ? await User.find({ _id: { $in: assignedStudentIds }, role: 'Student', active: true, emailVerified: true }) : [];
+    if (students.length !== assignedStudentIds.length) return sendError(res, 400, 'INVALID_STUDENTS', 'Assignments must refer to active, verified student accounts.');
+    if (fields.passMark > questions.reduce((s, q) => s + q.marks, 0)) return sendError(res, 400, 'INVALID_PASS_MARK', 'Pass mark cannot exceed the maximum score.');
+    const hasAttempts = await Attempt.exists({ examId: exam._id });
+    const scheduleChanged = new Date(fields.startAt).getTime() !== exam.startAt.getTime()
+      || new Date(fields.endAt).getTime() !== exam.endAt.getTime();
+    const assignmentsChanged = !sameIdSet(assignedStudentIds, exam.assignedStudentIds);
+    if (hasAttempts && (fields.durationMinutes !== exam.durationMinutes || !sameIds(questionIds, exam.questionIds)
+      || fields.passMark !== exam.passMark || fields.negativeMark !== exam.negativeMark
+      || scheduleChanged || assignmentsChanged || fields.reviewEnabled !== exam.reviewEnabled)) {
+      return sendError(res, 409, 'EXAM_LOCKED', 'Schedule, assignments, question selection, duration, scoring, and review settings cannot be changed after a student starts an attempt.');
+    }
+    Object.assign(exam, fields, { questionIds, assignedStudentIds });
+    await exam.save();
+    await writeAudit(req, 'EXAM_UPDATED', { examId: exam.id });
+    res.json(examView(exam, true));
   } catch (e) { next(e); }
 });
 
@@ -121,17 +149,9 @@ app.get('/api/exams', authenticate, async (req, res, next) => {
       : { ownerId: req.user._id };
 
     const exams = await Exam.find(filter).sort({ startAt: 1 });
-
     if (req.user.role !== 'Student') {
       return res.json({
-        exams: exams.map((e) => ({
-          id: e.id,
-          title: e.title,
-          startAt: e.startAt,
-          endAt: e.endAt,
-          durationMinutes: e.durationMinutes,
-          status: e.status,
-        })),
+        exams: exams.map((e) => examView(e, true)),
       });
     }
 
@@ -151,16 +171,16 @@ app.get('/api/exams', authenticate, async (req, res, next) => {
         let studentStatus;
 
         if (attempt?.status === 'IN_PROGRESS' && attempt.endsAt > now) {
-  studentStatus = 'Open';
-} else if (attempt) {
-  studentStatus = 'Attempted';
-} else if (now < e.startAt) {
-  studentStatus = 'Upcoming';
-} else if (now < e.endAt) {
-  studentStatus = 'Open';
-} else {
-  studentStatus = 'Missed';
-}
+          studentStatus = 'Open';
+        } else if (attempt) {
+          studentStatus = 'Attempted';
+        } else if (now < e.startAt) {
+          studentStatus = 'Upcoming';
+        } else if (now < e.endAt) {
+          studentStatus = 'Open';
+        } else {
+          studentStatus = 'Missed';
+        }
 
         return {
           id: e.id,
@@ -170,11 +190,9 @@ app.get('/api/exams', authenticate, async (req, res, next) => {
           durationMinutes: e.durationMinutes,
           status: e.status,
           studentStatus,
-          canResume:
-  attempt?.status === 'IN_PROGRESS' &&
-  attempt.endsAt > now &&
-  now < e.endAt,
-
+          canResume: attempt?.status === 'IN_PROGRESS'
+            && attempt.endsAt > now
+            && now < e.endAt,
         };
       }),
     });
@@ -357,6 +375,29 @@ async function finishAttempt(attempt, exam, req = null) {
   return attempt;
 }
 function resultView(attempt, exam) { return { id: attempt.id, status: attempt.status, score: attempt.score, maximumScore: attempt.maximumScore, passed: attempt.passed, correctCount: attempt.correctCount, wrongCount: attempt.wrongCount, unansweredCount: attempt.unansweredCount, submittedAt: attempt.submittedAt, reviewAvailable: Boolean(exam.reviewEnabled && new Date() >= exam.endAt) }; }
+
+function sameIds(left, right) {
+  return left.length === right.length && left.every((id, index) => String(id) === String(right[index]));
+}
+
+function sameIdSet(left, right) {
+  const leftIds = left.map(String).sort();
+  const rightIds = right.map(String).sort();
+  return sameIds(leftIds, rightIds);
+}
+
+function examView(exam, includeConfiguration = false) {
+  const view = { id: exam.id, title: exam.title, startAt: exam.startAt, endAt: exam.endAt, durationMinutes: exam.durationMinutes, status: exam.status };
+  if (!includeConfiguration) return view;
+  return {
+    ...view,
+    passMark: exam.passMark,
+    negativeMark: exam.negativeMark,
+    reviewEnabled: exam.reviewEnabled,
+    questionIds: exam.questionIds.map(String),
+    assignedStudentIds: exam.assignedStudentIds.map(String),
+  };
+}
 
 export default app;
 
