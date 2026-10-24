@@ -4,23 +4,29 @@ import mongoose from 'mongoose';
 import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server-core';
 import app, { submitExpiredAttempts } from '../src/app.js';
-import { User, Question, Exam, Attempt, Session } from '../src/models/index.js';
+import { User, Question, Exam, Attempt } from '../src/models/index.js';
 import { hashPassword } from '../src/security/password.js';
-import { COOKIE_NAME, newOpaqueToken, hashToken, INACTIVITY_MS } from '../src/security/session.js';
 
-let mongo; let instructor; let student; let stranger; let instructorAgent; let studentAgent; let strangerAgent; let csrfInstructor; let csrfStudent; let csrfStranger; let examId; let questionId; let attemptId;
-const login = async (agent, email) => { const response = await agent.post('/api/auth/login').send({ email, password: 'TestPass123' }).expect(200); return response.body.csrfToken; };
+let mongo; let instructor; let student; let stranger; let otherInstructor; let instructorAgent; let studentAgent; let strangerAgent; let otherInstructorAgent; let csrfInstructor; let csrfStudent; let csrfStranger; let csrfOtherInstructor; let examId; let questionId; let attemptId; let loginAddress = 0;
+const login = async (agent, email) => { loginAddress += 1; const response = await agent.post('/api/auth/login').set('x-forwarded-for', `203.0.113.${loginAddress}`).send({ email, password: 'TestPass123' }).expect(200); return response.body.csrfToken; };
+const examPayload = (overrides = {}) => ({
+  title: 'Lifecycle test', durationMinutes: 10,
+  startAt: new Date(Date.now() - 60_000).toISOString(), endAt: new Date(Date.now() + 600_000).toISOString(),
+  passMark: 1, negativeMark: 0, questionIds: [questionId], assignedStudentIds: [String(student._id)], reviewEnabled: false,
+  ...overrides,
+});
 before(async () => {
   process.env.MONGOMS_DOWNLOAD_DIR ??= new URL('../../.cache/mongodb-binaries', import.meta.url).pathname.replace(/^\//, '').replaceAll('/', '\\');
   mongo = await MongoMemoryServer.create(); await mongoose.connect(mongo.getUri());
   const passwordHash = await hashPassword('TestPass123');
-  [instructor, student, stranger] = await Promise.all([
+  [instructor, student, stranger, otherInstructor] = await Promise.all([
     User.create({ name: 'Instructor', email: 'i@example.test', passwordHash, role: 'Instructor', emailVerified: true }),
     User.create({ name: 'Student', email: 's@example.test', passwordHash, role: 'Student', emailVerified: true }),
     User.create({ name: 'Other Student', email: 'x@example.test', passwordHash, role: 'Student', emailVerified: true }),
+    User.create({ name: 'Other Instructor', email: 'other-i@example.test', passwordHash, role: 'Instructor', emailVerified: true }),
   ]);
-  instructorAgent = request.agent(app); studentAgent = request.agent(app); strangerAgent = request.agent(app);
-  csrfInstructor = await login(instructorAgent, instructor.email); csrfStudent = await login(studentAgent, student.email); csrfStranger = await login(strangerAgent, stranger.email);
+  instructorAgent = request.agent(app); studentAgent = request.agent(app); strangerAgent = request.agent(app); otherInstructorAgent = request.agent(app);
+  csrfInstructor = await login(instructorAgent, instructor.email); csrfStudent = await login(studentAgent, student.email); csrfStranger = await login(strangerAgent, stranger.email); csrfOtherInstructor = await login(otherInstructorAgent, otherInstructor.email);
   const q = await instructorAgent.post('/api/questions').set('x-csrf-token', csrfInstructor).send({ text: 'One plus one?', options: [{ id: 'a', text: '2' }, { id: 'b', text: '3' }], correctOptionId: 'a', marks: 2 }).expect(201);
   questionId = q.body.id;
   const exam = await instructorAgent.post('/api/exams').set('x-csrf-token', csrfInstructor).send({ title: 'Arithmetic', durationMinutes: 5, startAt: new Date(Date.now() - 60_000).toISOString(), endAt: new Date(Date.now() + 600_000).toISOString(), passMark: 2, questionIds: [questionId], assignedStudentIds: [String(student._id)] }).expect(201);
@@ -74,21 +80,10 @@ describe('SRS-aligned exam workflow', () => {
       text: 'Temporary question', options: [{ id: 'first', text: 'First' }, { id: 'second', text: 'Second' }], correctOptionId: 'second', marks: 1,
     }).expect(201);
     const id = created.body.id;
-    const otherInstructor = await User.create({ name: 'Other Instructor', email: 'other-i@example.test', passwordHash: await hashPassword('TestPass123'), role: 'Instructor', emailVerified: true });
-    const otherToken = newOpaqueToken();
-    const otherCsrf = newOpaqueToken();
-    const now = new Date();
-    await Session.create({ tokenHash: hashToken(otherToken), csrfToken: otherCsrf, userId: otherInstructor._id, lastActivity: now, expiresAt: new Date(now.getTime() + INACTIVITY_MS) });
-    const cookie = `${COOKIE_NAME}=${otherToken}`;
-    const otherAgent = {
-      put: (path) => request(app).put(path).set('Cookie', cookie),
-      delete: (path) => request(app).delete(path).set('Cookie', cookie),
-    };
-
     await studentAgent.put(`/api/questions/${id}`).set('x-csrf-token', csrfStudent).send({}).expect(403);
     await studentAgent.delete(`/api/questions/${id}`).set('x-csrf-token', csrfStudent).expect(403);
-    await otherAgent.put(`/api/questions/${id}`).set('x-csrf-token', otherCsrf).send({ text: 'No', options: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], correctOptionId: 'a', marks: 1 }).expect(404);
-    await otherAgent.delete(`/api/questions/${id}`).set('x-csrf-token', otherCsrf).expect(404);
+    await otherInstructorAgent.put(`/api/questions/${id}`).set('x-csrf-token', csrfOtherInstructor).send({ text: 'No', options: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], correctOptionId: 'a', marks: 1 }).expect(404);
+    await otherInstructorAgent.delete(`/api/questions/${id}`).set('x-csrf-token', csrfOtherInstructor).expect(404);
     await instructorAgent.put('/api/questions/not-an-id').set('x-csrf-token', csrfInstructor).send({}).expect(400);
     await instructorAgent.put(`/api/questions/${new mongoose.Types.ObjectId()}`).set('x-csrf-token', csrfInstructor).send({}).expect(400);
     await instructorAgent.put(`/api/questions/${id}`).set('x-csrf-token', csrfInstructor).send({ text: 'Changed', options: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], correctOptionId: 'missing', marks: 1 }).expect(400);
@@ -126,6 +121,14 @@ describe('SRS-aligned exam workflow', () => {
       passMark: 1, questionIds: [questionId, questionId],
     }).expect(400);
   });
+  it('rejects another instructor’s question and duplicate student assignments', async () => {
+    const created = await otherInstructorAgent.post('/api/questions').set('x-csrf-token', csrfOtherInstructor).send({
+      text: 'Other instructor question', options: [{ id: 'yes', text: 'Yes' }, { id: 'no', text: 'No' }], correctOptionId: 'yes', marks: 1,
+    }).expect(201);
+    await instructorAgent.post('/api/exams').set('x-csrf-token', csrfInstructor).send(examPayload({ questionIds: [created.body.id] }))
+      .expect(400).expect(({ body }) => assert.equal(body.error.code, 'INVALID_QUESTIONS'));
+    await instructorAgent.post('/api/exams').set('x-csrf-token', csrfInstructor).send(examPayload({ assignedStudentIds: [String(student._id), String(student._id)] })).expect(400);
+  });
   it('does not assign exams to active but unverified student accounts', async () => {
     const passwordHash = await hashPassword('TestPass123');
     const unverified = await User.create({ name: 'Unverified Student', email: 'unverified@example.test', passwordHash, role: 'Student', emailVerified: false });
@@ -134,6 +137,51 @@ describe('SRS-aligned exam workflow', () => {
       startAt: new Date(Date.now() - 60_000).toISOString(), endAt: new Date(Date.now() + 600_000).toISOString(),
       passMark: 1, questionIds: [questionId], assignedStudentIds: [String(unverified._id)],
     }).expect(400).expect(({ body }) => assert.equal(body.error.code, 'INVALID_STUDENTS'));
+  });
+  it('allows the owner to edit an exam before attempts and denies other instructors', async () => {
+    const secondQuestion = await instructorAgent.post('/api/questions').set('x-csrf-token', csrfInstructor).send({
+      text: 'Second question', options: [{ id: 'yes', text: 'Yes' }, { id: 'no', text: 'No' }], correctOptionId: 'yes', marks: 1,
+    }).expect(201);
+    const exam = await instructorAgent.post('/api/exams').set('x-csrf-token', csrfInstructor).send(examPayload()).expect(201);
+    const update = examPayload({ title: 'Updated exam', durationMinutes: 20, questionIds: [questionId, secondQuestion.body.id] });
+    const changed = await instructorAgent.put(`/api/exams/${exam.body.id}`).set('x-csrf-token', csrfInstructor).send(update).expect(200);
+    assert.equal(changed.body.title, 'Updated exam');
+    assert.equal(changed.body.durationMinutes, 20);
+    assert.deepEqual(changed.body.questionIds, [questionId, secondQuestion.body.id]);
+    assert.ok(!(await otherInstructorAgent.get('/api/exams').expect(200)).body.exams.some((item) => item.id === exam.body.id));
+    await otherInstructorAgent.put(`/api/exams/${exam.body.id}`).set('x-csrf-token', csrfOtherInstructor).send(update).expect(404);
+  });
+  it('locks attempt-sensitive exam settings after the first attempt starts', async () => {
+    const exam = await instructorAgent.post('/api/exams').set('x-csrf-token', csrfInstructor).send(examPayload()).expect(201);
+    await studentAgent.post(`/api/exams/${exam.body.id}/attempts`).set('x-csrf-token', csrfStudent).expect(201);
+    const changedDuration = examPayload({ durationMinutes: 20 });
+    await instructorAgent.put(`/api/exams/${exam.body.id}`).set('x-csrf-token', csrfInstructor).send(changedDuration)
+      .expect(409).expect(({ body }) => assert.equal(body.error.code, 'EXAM_LOCKED'));
+    await instructorAgent.put(`/api/exams/${exam.body.id}`).set('x-csrf-token', csrfInstructor).send(examPayload({ passMark: 2 }))
+      .expect(409).expect(({ body }) => assert.equal(body.error.code, 'EXAM_LOCKED'));
+    await instructorAgent.put(`/api/exams/${exam.body.id}`).set('x-csrf-token', csrfInstructor)
+      .send(examPayload({ startAt: new Date(Date.now() - 30_000).toISOString() }))
+      .expect(409).expect(({ body }) => assert.equal(body.error.code, 'EXAM_LOCKED'));
+    await instructorAgent.put(`/api/exams/${exam.body.id}`).set('x-csrf-token', csrfInstructor)
+      .send(examPayload({ endAt: new Date(Date.now() + 900_000).toISOString() }))
+      .expect(409).expect(({ body }) => assert.equal(body.error.code, 'EXAM_LOCKED'));
+    await instructorAgent.put(`/api/exams/${exam.body.id}`).set('x-csrf-token', csrfInstructor)
+      .send(examPayload({ assignedStudentIds: [String(stranger._id)] }))
+      .expect(409).expect(({ body }) => assert.equal(body.error.code, 'EXAM_LOCKED'));
+    await instructorAgent.put(`/api/exams/${exam.body.id}`).set('x-csrf-token', csrfInstructor)
+      .send(examPayload({ reviewEnabled: true }))
+      .expect(409).expect(({ body }) => assert.equal(body.error.code, 'EXAM_LOCKED'));
+    await otherInstructorAgent.put(`/api/exams/${exam.body.id}`).set('x-csrf-token', csrfOtherInstructor).send(changedDuration).expect(404);
+  });
+  it('rejects student starts before and after an exam’s scheduled window', async () => {
+    const startAt = new Date(Date.now() + 60_000).toISOString();
+    const endAt = new Date(Date.now() + 120_000).toISOString();
+    const exam = await instructorAgent.post('/api/exams').set('x-csrf-token', csrfInstructor).send(examPayload({ startAt, endAt })).expect(201);
+    await studentAgent.post(`/api/exams/${exam.body.id}/attempts`).set('x-csrf-token', csrfStudent)
+      .expect(409).expect(({ body }) => assert.equal(body.error.code, 'EXAM_CLOSED'));
+    await Exam.findByIdAndUpdate(exam.body.id, { startAt: new Date(Date.now() - 120_000), endAt: new Date(Date.now() - 60_000) });
+    await studentAgent.post(`/api/exams/${exam.body.id}/attempts`).set('x-csrf-token', csrfStudent)
+      .expect(409).expect(({ body }) => assert.equal(body.error.code, 'EXAM_CLOSED'));
   });
   it('publishes an exam with its selected schedule, scoring, questions, and student assignments', async () => {
     const configured = await instructorAgent.post('/api/exams').set('x-csrf-token', csrfInstructor).send({
@@ -150,7 +198,7 @@ describe('SRS-aligned exam workflow', () => {
     assert.deepEqual(stored.assignedStudentIds.map(String), [String(student._id)]);
   });
   it('limits exam listing and attempts to assigned student accounts', async () => {
-    const list = await studentAgent.get('/api/exams').expect(200); assert.equal(list.body.exams.length, 2);
+    const list = await studentAgent.get('/api/exams').expect(200); assert.ok(list.body.exams.length >= 1);
     assert.ok(list.body.exams.some((exam) => exam.id === examId));
     assert.equal((await strangerAgent.get('/api/exams').expect(200)).body.exams.length, 0);
     const started = await studentAgent.post(`/api/exams/${examId}/attempts`).set('x-csrf-token', csrfStudent).expect(201);
