@@ -1,6 +1,19 @@
 # Local test execution record
 
-## Presentation-readiness verification — 13 October 2026 (latest)
+## Current verification — 24 October 2026
+
+- Fetched refs show PR #28 merged to `main` at `88c21bcf2d887fcc9f5381e509523592167142bb`, PR #30 at `17cdedda37b70f6f3b93f4b3c9a5b868505b2f8d`, and PR #31 at `62b817f0151ab68e63a66055ae3ccdfcc2a0d6a9`.
+- On local branch `feature/issue-4-question-management` based on PR #31's merge commit, the instructor question bank has edit/delete UI and owner-scoped API routes. Edits require a valid MCQ; questions referenced by an exam cannot be changed or deleted. Malformed JSON receives a safe 400 response.
+- `npm.cmd test`: **28 passed, 0 failed, 0 skipped** (17 API workflow tests, 3 scoring tests, and 8 client tests). Note: the final run took about 250 seconds because the login lockout test performs repeated password hashing.
+- `npm.cmd --workspace server run check`: passed. The Vite production build with `--configLoader native` passed; Vite transformed 16 modules and produced JS 234.59 kB (72.90 kB gzip) and CSS 6.65 kB (2.05 kB gzip).
+- `git diff --check`: passed. No authenticated browser walkthrough or fresh Actions run was verified. The question-management follow-up is not yet merged.
+
+## Earlier local verification — 24 October 2026 (before PR #28 merge was verified)
+
+- `feature/chhavi-sprint1-issues` was pushed and later merged as PR #28; see the current verification above. The original statements that the branch was pending/unpushed are superseded by the fetched merge commit evidence.
+- At that earlier point, `npm.cmd test` passed 15 tests and `npm.cmd run build` passed. Those results are historical and are superseded by the current 22-test run above.
+
+## Presentation-readiness verification — 13 October 2026 (historical baseline)
 
 - The user ran `npm.cmd ci` in this checkout; their terminal output reported 184 packages added, 187 audited, and 0 vulnerabilities. The PowerShell `npm` alias to `npm.ps1` was blocked by execution policy, so the `.cmd` entry point was used without changing policy.
 - Independently reran `npm.cmd test` and `npm.cmd run build` from the actual `work/repo` checkout on `feature/mvp-exam-workflow` with Node.js v22.21.0 and npm 10.9.4. Tests passed **12/12** (9 API workflow tests and 3 scoring tests; 0 failed/skipped). Server syntax checks passed. Vite production build passed, transforming 15 modules; emitted JS was 227.05 kB (71.03 kB gzip), CSS 5.13 kB (1.71 kB gzip).

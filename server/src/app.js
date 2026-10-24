@@ -52,15 +52,56 @@ const questionInput = z.object({ text: z.string().trim().min(1).max(2000), optio
 app.post('/api/questions', authenticate, requireRole('Instructor', 'Administrator'), requireCsrf, async (req, res, next) => {
   try { const p = questionInput.safeParse(req.body); if (!p.success) return bad(res, p.error.issues); const question = await Question.create({ ...p.data, options: p.data.options.map(({ id, text }) => ({ _id: id, text })), ownerId: req.user._id }); await writeAudit(req, 'QUESTION_CREATED', { questionId: question.id }); res.status(201).json({ id: question.id, text: question.text, options: question.options.map((o) => ({ id: o._id, text: o.text })), marks: question.marks }); } catch (e) { next(e); }
 });
-const examInput = z.object({ title: z.string().trim().min(1).max(160), durationMinutes: z.number().int().min(1).max(600), startAt: z.string().datetime(), endAt: z.string().datetime(), passMark: z.number().min(0), negativeMark: z.number().min(0).max(100).default(0), questionIds: z.array(objectId).min(1), assignedStudentIds: z.array(objectId).default([]), reviewEnabled: z.boolean().default(false) }).refine((e) => new Date(e.endAt) > new Date(e.startAt), 'Exam end must be after start.');
+app.get('/api/questions', authenticate, requireRole('Instructor', 'Administrator'), async (req, res, next) => {
+  try {
+    const questions = await Question.find({ ownerId: req.user._id }).select('+correctOptionId').sort({ createdAt: -1 });
+    res.json({ questions: questions.map((q) => ({ id: q.id, text: q.text, options: q.options.map((o) => ({ id: o._id, text: o.text })), correctOptionId: q.correctOptionId, marks: q.marks })) });
+  } catch (e) { next(e); }
+});
+app.put('/api/questions/:questionId', authenticate, requireRole('Instructor', 'Administrator'), requireCsrf, async (req, res, next) => {
+  try {
+    if (!objectId.safeParse(req.params.questionId).success) return sendError(res, 400, 'INVALID_ID', 'Invalid question identifier.');
+    const p = questionInput.safeParse(req.body); if (!p.success) return bad(res, p.error.issues);
+    const question = await Question.findOne({ _id: req.params.questionId, ownerId: req.user._id });
+    if (!question) return sendError(res, 404, 'QUESTION_NOT_FOUND', 'Question not found.');
+    if (await Exam.exists({ questionIds: question._id })) return sendError(res, 409, 'QUESTION_IN_USE', 'Questions used by an exam cannot be edited.');
+    question.text = p.data.text;
+    question.options = p.data.options.map(({ id, text }) => ({ _id: id, text }));
+    question.correctOptionId = p.data.correctOptionId;
+    question.marks = p.data.marks;
+    await question.save();
+    await writeAudit(req, 'QUESTION_UPDATED', { questionId: question.id });
+    res.json({ id: question.id, text: question.text, options: question.options.map((o) => ({ id: o._id, text: o.text })), correctOptionId: question.correctOptionId, marks: question.marks });
+  } catch (e) { next(e); }
+});
+app.delete('/api/questions/:questionId', authenticate, requireRole('Instructor', 'Administrator'), requireCsrf, async (req, res, next) => {
+  try {
+    if (!objectId.safeParse(req.params.questionId).success) return sendError(res, 400, 'INVALID_ID', 'Invalid question identifier.');
+    const question = await Question.findOne({ _id: req.params.questionId, ownerId: req.user._id });
+    if (!question) return sendError(res, 404, 'QUESTION_NOT_FOUND', 'Question not found.');
+    if (await Exam.exists({ questionIds: question._id })) return sendError(res, 409, 'QUESTION_IN_USE', 'Questions used by an exam cannot be deleted.');
+    await question.deleteOne();
+    await writeAudit(req, 'QUESTION_DELETED', { questionId: req.params.questionId });
+    res.status(204).end();
+  } catch (e) { next(e); }
+});
+app.get('/api/students', authenticate, requireRole('Instructor', 'Administrator'), async (_req, res, next) => {
+  try {
+    const students = await User.find({ role: 'Student', active: true, emailVerified: true }).sort({ name: 1 });
+    res.json({ students: students.map((student) => ({ id: student.id, name: student.name, email: student.email })) });
+  } catch (e) { next(e); }
+});
+const examInput = z.object({ title: z.string().trim().min(1).max(160), durationMinutes: z.number().int().min(1).max(600), startAt: z.string().datetime(), endAt: z.string().datetime(), passMark: z.number().min(0), negativeMark: z.number().min(0).max(100).default(0), questionIds: z.array(objectId).min(1), assignedStudentIds: z.array(objectId).default([]), reviewEnabled: z.boolean().default(false) })
+  .refine((e) => new Date(e.endAt) > new Date(e.startAt), 'Exam end must be after start.')
+  .refine((e) => new Set(e.questionIds).size === e.questionIds.length, 'Exam questions must be unique.');
 app.post('/api/exams', authenticate, requireRole('Instructor', 'Administrator'), requireCsrf, async (req, res, next) => {
   try {
     const p = examInput.safeParse(req.body); if (!p.success) return bad(res, p.error.issues);
     const { questionIds, assignedStudentIds, ...fields } = p.data;
     const questions = await Question.find({ _id: { $in: questionIds }, ownerId: req.user._id });
     if (questions.length !== questionIds.length) return sendError(res, 400, 'INVALID_QUESTIONS', 'Every question must exist and belong to you.');
-    const students = assignedStudentIds.length ? await User.find({ _id: { $in: assignedStudentIds }, role: 'Student', active: true }) : [];
-    if (students.length !== assignedStudentIds.length) return sendError(res, 400, 'INVALID_STUDENTS', 'Assignments must refer to active student accounts.');
+    const students = assignedStudentIds.length ? await User.find({ _id: { $in: assignedStudentIds }, role: 'Student', active: true, emailVerified: true }) : [];
+    if (students.length !== assignedStudentIds.length) return sendError(res, 400, 'INVALID_STUDENTS', 'Assignments must refer to active, verified student accounts.');
     if (fields.passMark > questions.reduce((s, q) => s + q.marks, 0)) return sendError(res, 400, 'INVALID_PASS_MARK', 'Pass mark cannot exceed the maximum score.');
     const exam = await Exam.create({ ...fields, ownerId: req.user._id, questionIds, assignedStudentIds, status: 'Published' });
     await writeAudit(req, 'EXAM_PUBLISHED', { examId: exam.id });
@@ -161,6 +202,32 @@ app.post('/api/exams/:examId/attempts', authenticate, requireRole('Student'), re
     return res.status(201).json({ attempt: { id: attempt.id, examId: exam.id, endsAt: attempt.endsAt, status: attempt.status, answers: attempt.answers }, questions: await safeQuestions(exam.questionIds) });
   } catch (e) { next(e); }
 });
+app.get('/api/attempts/mine', authenticate, requireRole('Student'), async (req, res, next) => {
+  try {
+    const attempts = await Attempt.find({
+      studentId: req.user._id,
+      status: 'SUBMITTED',
+    }).sort({ submittedAt: -1 });
+
+    const results = await Promise.all(
+      attempts.map(async (attempt) => {
+        const exam = await Exam.findById(attempt.examId);
+
+        if (!exam) return null;
+
+        return {
+          ...resultView(attempt, exam),
+          examId: exam.id,
+          examTitle: exam.title,
+        };
+      })
+    );
+
+    res.json({ results: results.filter(Boolean) });
+  } catch (e) {
+    next(e);
+  }
+});
 app.get('/api/attempts/:attemptId', authenticate, requireRole('Student'), async (req, res, next) => {
   try {
     const attempt = await Attempt.findOne({ _id: req.params.attemptId, studentId: req.user._id });
@@ -195,6 +262,9 @@ app.post('/api/attempts/:attemptId/focus-loss', authenticate, requireRole('Stude
 app.post('/api/attempts/:attemptId/submit', authenticate, requireRole('Student'), requireCsrf, async (req, res, next) => {
   try { const attempt = await Attempt.findOne({ _id: req.params.attemptId, studentId: req.user._id, status: 'IN_PROGRESS' }); if (!attempt) return sendError(res, 404, 'ATTEMPT_NOT_FOUND', 'Active attempt not found.'); const exam = await Exam.findById(attempt.examId); await finishAttempt(attempt, exam, req); res.json({ attempt: resultView(attempt, exam) }); } catch (e) { next(e); }
 });
+
+
+
 app.get('/api/attempts/:attemptId/result', authenticate, async (req, res, next) => {
   try {
     let attempt;
@@ -211,8 +281,68 @@ app.get('/api/attempts/:attemptId/result', authenticate, async (req, res, next) 
     res.json({ attempt: resultView(attempt, exam) });
   } catch (e) { next(e); }
 });
+
+app.get('/api/attempts/:attemptId/review', authenticate, requireRole('Student'), async (req, res, next) => {
+  try {
+    if (!objectId.safeParse(req.params.attemptId).success) {
+      return sendError(res, 400, 'INVALID_ID', 'Invalid attempt identifier.');
+    }
+
+    const attempt = await Attempt.findOne({
+      _id: req.params.attemptId,
+      studentId: req.user._id,
+      status: 'SUBMITTED',
+    });
+
+    if (!attempt) {
+      return sendError(res, 404, 'ATTEMPT_NOT_FOUND', 'Submitted attempt not found.');
+    }
+
+    const exam = await Exam.findById(attempt.examId);
+
+    if (!exam || !exam.reviewEnabled || new Date() < exam.endAt) {
+      return sendError(res, 403, 'REVIEW_NOT_AVAILABLE', 'Answer review is not available.');
+    }
+
+    const questions = await Question.find({
+      _id: { $in: exam.questionIds },
+    }).select('+correctOptionId');
+
+    const review = exam.questionIds.map((questionId) => {
+      const question = questions.find(
+        (item) => String(item._id) === String(questionId)
+      );
+
+      if (!question) return null;
+
+      const answer = attempt.answers.find(
+        (item) => String(item.questionId) === String(questionId)
+      );
+
+      return {
+        questionId: String(question._id),
+        text: question.text,
+        marks: question.marks,
+        options: question.options.map((option) => ({
+          id: option._id,
+          text: option.text,
+        })),
+        selectedOptionId: answer?.selectedOptionId ?? null,
+        correctOptionId: question.correctOptionId,
+      };
+    });
+
+    res.json({ review: review.filter(Boolean) });
+  } catch (e) {
+    next(e);
+  }
+});
+
 app.use((_req, res) => sendError(res, 404, 'NOT_FOUND', 'The requested resource was not found.'));
-app.use((err, _req, res, _next) => { console.error('Request failed:', err.message); if (res.headersSent) return; sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected server error occurred.'); });
+app.use((err, _req, res, _next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) return sendError(res, 400, 'INVALID_JSON', 'Request body must be valid JSON.');
+  console.error('Request failed:', err.message); if (res.headersSent) return; sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected server error occurred.');
+});
 
 async function safeQuestions(ids) {
   const docs = await Question.find({ _id: { $in: ids } });
