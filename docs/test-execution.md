@@ -2,11 +2,11 @@
 
 ## Current verification — 24 October 2026
 
-- Fetched refs show PR #28 merged to `main` by merge commit `88c21bcf2d887fcc9f5381e509523592167142bb` (`Merge pull request #28 from SE-Team-06/feature/chhavi-sprint1-issues`). Its second parent is feature tip `9973c2df08a493ecfa2115723da4fa410796b797`; implementation commit `a251df3222933dda8b2891345fdb18c1e9f00656` and that feature tip are ancestors of `origin/main`. This verifies repository history, not the current live Actions result.
-- On an isolated local branch `fix/question-correct-option-selection` based on that fetched `origin/main`, a small UI validation fix now reconciles the selected correct answer when an optional option is cleared. This follow-up branch is local and has not been pushed or opened as a PR.
-- `npm.cmd test`: **22 passed, 0 failed, 0 skipped** (12 API workflow tests, 3 scoring tests, and 7 client regression tests).
-- `npm.cmd run build`: the default config bundler hit `EPERM` attempting to write a temporary file through the read-only shared `node_modules` junction. The build itself passed with `npm.cmd --workspace server run check` and `npm.cmd --workspace client run build -- --configLoader native`; Vite transformed 16 modules and produced JS 233.36 kB (72.51 kB gzip) and CSS 6.65 kB (2.05 kB gzip).
-- `git diff --check`: passed. No authenticated browser walkthrough or fresh Actions run was verified. The #2 login/role path is API-tested; #4 question authoring and #5 exam configuration still need manual UI acceptance. Question/exam editing and deletion remain outside this slice.
+- Fetched refs show PR #28 merged to `main` at `88c21bcf2d887fcc9f5381e509523592167142bb` and PR #30 merged at `17cdedda37b70f6f3b93f4b3c9a5b868505b2f8d`. Both feature commits are in the current `origin/main` ancestry. This verifies local fetched history, not the current live Actions result.
+- On local branch `feature/issue-4-5-authoring-validation` based on `origin/main` at `17cdedda37b70f6f3b93f4b3c9a5b868505b2f8d`, API validation now rejects end-before-start schedules, duplicate question selection, and exam assignment to active but unverified student accounts. This follow-up is not yet published.
+- `npm.cmd test`: **24 passed, 0 failed, 0 skipped** (14 API workflow tests, 3 scoring tests, and 7 client tests).
+- `npm.cmd --workspace server run check`: passed. `npm.cmd --workspace client run build -- --configLoader native`: passed; Vite transformed 16 modules and produced JS 233.36 kB (72.51 kB gzip) and CSS 6.65 kB (2.05 kB gzip). The native config loader avoids the known temporary-file EPERM through the shared dependency junction.
+- `git diff --check`: passed. No authenticated browser walkthrough, live issue #4/#5 criteria reread, or fresh Actions run was verified. Question/exam editing and deletion remain unimplemented; whether they block these GitHub issues cannot be confirmed without their live acceptance criteria.
 
 ## Earlier local verification — 24 October 2026 (before PR #28 merge was verified)
 

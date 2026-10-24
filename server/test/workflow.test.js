@@ -68,6 +68,26 @@ describe('SRS-aligned exam workflow', () => {
     await instructorAgent.post('/api/questions').set('x-csrf-token', csrfInstructor).send({ text: 'Bad', options: [{ id: 'a', text: 'A' }, { id: 'a', text: 'Duplicate' }], correctOptionId: 'z', marks: 1 }).expect(400);
     await instructorAgent.post('/api/exams').set('x-csrf-token', csrfInstructor).send({ title: 'Bad', durationMinutes: 5, startAt: new Date().toISOString(), endAt: new Date(Date.now() + 10000).toISOString(), passMark: 1, questionIds: [String(new mongoose.Types.ObjectId())] }).expect(400);
   });
+  it('rejects invalid schedules and duplicate question selections', async () => {
+    const startAt = new Date(Date.now() + 60_000).toISOString();
+    const endAt = new Date(Date.now() + 30_000).toISOString();
+    await instructorAgent.post('/api/exams').set('x-csrf-token', csrfInstructor).send({
+      title: 'Invalid schedule', durationMinutes: 5, startAt, endAt, passMark: 1, questionIds: [questionId],
+    }).expect(400);
+    await instructorAgent.post('/api/exams').set('x-csrf-token', csrfInstructor).send({
+      title: 'Duplicate question', durationMinutes: 5, startAt, endAt: new Date(Date.now() + 120_000).toISOString(),
+      passMark: 1, questionIds: [questionId, questionId],
+    }).expect(400);
+  });
+  it('does not assign exams to active but unverified student accounts', async () => {
+    const passwordHash = await hashPassword('TestPass123');
+    const unverified = await User.create({ name: 'Unverified Student', email: 'unverified@example.test', passwordHash, role: 'Student', emailVerified: false });
+    await instructorAgent.post('/api/exams').set('x-csrf-token', csrfInstructor).send({
+      title: 'Unverified assignment', durationMinutes: 5,
+      startAt: new Date(Date.now() - 60_000).toISOString(), endAt: new Date(Date.now() + 600_000).toISOString(),
+      passMark: 1, questionIds: [questionId], assignedStudentIds: [String(unverified._id)],
+    }).expect(400).expect(({ body }) => assert.equal(body.error.code, 'INVALID_STUDENTS'));
+  });
   it('publishes an exam with its selected schedule, scoring, questions, and student assignments', async () => {
     const configured = await instructorAgent.post('/api/exams').set('x-csrf-token', csrfInstructor).send({
       title: 'Configured exam', durationMinutes: 45,
