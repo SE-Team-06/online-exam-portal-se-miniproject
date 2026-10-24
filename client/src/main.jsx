@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { reconcileCorrectOptionId, validateQuestionDraft } from './question-form.js';
@@ -11,8 +12,12 @@ async function api(path, { method = 'GET', body, csrf } = {}) {
     body: body ? JSON.stringify(body) : undefined,
   });
   if (response.status === 204) return null;
+
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error?.message ?? 'Request failed.');
+  if (!response.ok) {
+    throw new Error(data.error?.message ?? 'Request failed.');
+  }
+
   return data;
 }
 
@@ -207,4 +212,8 @@ function App() {
     <footer><span>Online Exam Portal</span><span>Software Engineering Mini-Project</span></footer></main></div>;
 }
 
-createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>);
+createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
