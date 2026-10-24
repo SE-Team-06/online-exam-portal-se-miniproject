@@ -11,7 +11,7 @@ This handover describes the current local implementation and project setup. The 
 
 The project is a browser-based multiple-choice online examination portal with student, instructor, and administrator roles, as specified in the SRS. The canonical repository is [SE-Team-06/online-exam-portal-se-miniproject](https://github.com/SE-Team-06/online-exam-portal-se-miniproject).
 
-The implementation uses React and Vite for the web client, Node.js/Express for the API, MongoDB/Mongoose for data, and npm workspaces. PR #28 merged Chhavi's Sprint 1 work into `main`; the merge commit is `88c21bcf2d887fcc9f5381e509523592167142bb`, with feature tip `9973c2df08a493ecfa2115723da4fa410796b797`. PR #30 merged the correct-answer validation fix at `17cdedda37b70f6f3b93f4b3c9a5b868505b2f8d`, with fix commit `0fd7a765c48e47100dae44731be8a3e088271873`. These Git facts were verified from fetched refs on 24 October 2026. A separate issue #4/#5 validation follow-up is being prepared locally from that `main`; it is not yet committed, pushed, or reviewed. Use focused feature branches and owner-reviewed PRs for integration.
+The implementation uses React and Vite for the web client, Node.js/Express for the API, MongoDB/Mongoose for data, and npm workspaces. PR #28 merged Chhavi's Sprint 1 work into `main` at `88c21bcf2d887fcc9f5381e509523592167142bb`; PR #30 merged the correct-answer validation fix at `17cdedda37b70f6f3b93f4b3c9a5b868505b2f8d`. PR #31 merged exam validation into `main` at `62b817f0151ab68e63a66055ae3ccdfcc2a0d6a9`. These refs were verified from fetched local refs on 24 October 2026. The separate question-management follow-up is on `feature/issue-4-question-management`, based on that PR #31 merge, and is not yet merged.
 
 ## What exists now
 
@@ -21,13 +21,13 @@ The implementation uses React and Vite for the web client, Node.js/Express for t
 - Instructor APIs to create MCQs and create, publish, and assign exams.
 - Student assigned-exam listing, one-attempt start/resume, answer saving/flagging, manual submission, server-side scoring, expiry auto-submit, and student-owned result lookup.
 - Focus-loss event endpoint with persisted timestamps and selected audit records.
-- React login, student exam flow/result view, instructor question-bank create/list view, and instructor exam configure/publish/assign view. Question/exam editing and deletion are not implemented. PR #28 is merged; the merged UI has not had a separately verified authenticated browser acceptance walkthrough.
+- React login, student exam flow/result view, instructor question-bank create/list view, and instructor exam configure/publish/assign view are in `main`. The current local `feature/issue-4-question-management` adds owner-scoped question edit/delete UI and API; questions referenced by exams are protected against changes/deletion. Exam editing and deletion remain unimplemented. An authenticated browser acceptance walkthrough has not been performed.
 - Temporary demo with disposable MongoDB, seeded instructor/student accounts, and one short sample exam.
 
 ### What was observed
 
 - **User-reported manual check:** Chhavi opened the local demo, logged in as the instructor, and saw a subject. No additional manual feature verification is implied.
-- **Automated verification on 24 October:** `npm.cmd test` passed 24/24 after adding exam schedule, duplicate question selection, and verified-student assignment coverage; the server syntax check, Vite production build with `--configLoader native`, and `git diff --check` passed. Details are in [test execution](test-execution.md). These results do not replace an authenticated browser acceptance walkthrough. GitHub issue descriptions #4/#5 could not be re-read in this environment, so closure against every live acceptance criterion remains unverified.
+- **Automated verification on 24 October:** on `feature/issue-4-question-management`, `npm.cmd test` passed 28/28 after adding question CRUD, ownership, malformed-input, and referenced-question protection coverage. The server syntax check, Vite production build with `--configLoader native`, and `git diff --check` passed. Details are in [test execution](test-execution.md). These results do not replace an authenticated browser walkthrough; the question-management changes are not yet merged.
 - **Locally verified smoke check on 13 October 2026:** `npm run demo` started the API and Vite; `/api/health` returned HTTP 200 with `{"status":"ok"}` and `/` returned HTTP 200. The service was stopped afterward.
 - The local automated tests and build results are in [test-execution.md](test-execution.md). The updated RTM is [RTM_Online_Exam_Portal.xlsx](../SRS/RTM_Online_Exam_Portal.xlsx); its `Implementation Evidence` sheet records 53 requirement statuses with local evidence/gaps. No complete SRS requirement is marked complete merely because a partial path exists.
 
@@ -115,7 +115,7 @@ The exact test mapping and execution limitations are in [test-execution.md](test
 
 ## Current Git verification — 24 October 2026
 
-- Fetched `origin/main` is `17cdedda37b70f6f3b93f4b3c9a5b868505b2f8d`, the PR #30 merge commit. PR #28's merge and feature commits, and PR #30's fix commit, are in its ancestry. The current follow-up branch `feature/issue-4-5-authoring-validation` is based directly on this fetched `origin/main` and contains a local validation follow-up.
+- Fetched `origin/main` is `62b817f0151ab68e63a66055ae3ccdfcc2a0d6a9`, the PR #31 merge commit. PR #28, PR #30, and PR #31 are in its ancestry. The current question-management branch is based directly on this `origin/main`.
 - A fresh GitHub Actions run, current Jira statuses, and current Project board fields/access were not independently checked in this verification. The Jira and Project details below are dated historical snapshots and must not be treated as current without a live readback.
 - The official Part 2 PDF was not present in the repository file listing; the supplied local PDF path was unavailable to this session. Assignment requirements beyond the repository's own documentation therefore remain unverified here.
 

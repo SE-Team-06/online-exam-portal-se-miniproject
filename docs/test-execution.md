@@ -2,11 +2,11 @@
 
 ## Current verification — 24 October 2026
 
-- Fetched refs show PR #28 merged to `main` at `88c21bcf2d887fcc9f5381e509523592167142bb` and PR #30 merged at `17cdedda37b70f6f3b93f4b3c9a5b868505b2f8d`. Both feature commits are in the current `origin/main` ancestry. This verifies local fetched history, not the current live Actions result.
-- On local branch `feature/issue-4-5-authoring-validation` based on `origin/main` at `17cdedda37b70f6f3b93f4b3c9a5b868505b2f8d`, API validation now rejects end-before-start schedules, duplicate question selection, and exam assignment to active but unverified student accounts. This follow-up is not yet published.
-- `npm.cmd test`: **24 passed, 0 failed, 0 skipped** (14 API workflow tests, 3 scoring tests, and 7 client tests).
-- `npm.cmd --workspace server run check`: passed. `npm.cmd --workspace client run build -- --configLoader native`: passed; Vite transformed 16 modules and produced JS 233.36 kB (72.51 kB gzip) and CSS 6.65 kB (2.05 kB gzip). The native config loader avoids the known temporary-file EPERM through the shared dependency junction.
-- `git diff --check`: passed. No authenticated browser walkthrough, live issue #4/#5 criteria reread, or fresh Actions run was verified. Question/exam editing and deletion remain unimplemented; whether they block these GitHub issues cannot be confirmed without their live acceptance criteria.
+- Fetched refs show PR #28 merged to `main` at `88c21bcf2d887fcc9f5381e509523592167142bb`, PR #30 at `17cdedda37b70f6f3b93f4b3c9a5b868505b2f8d`, and PR #31 at `62b817f0151ab68e63a66055ae3ccdfcc2a0d6a9`.
+- On local branch `feature/issue-4-question-management` based on PR #31's merge commit, the instructor question bank has edit/delete UI and owner-scoped API routes. Edits require a valid MCQ; questions referenced by an exam cannot be changed or deleted. Malformed JSON receives a safe 400 response.
+- `npm.cmd test`: **28 passed, 0 failed, 0 skipped** (17 API workflow tests, 3 scoring tests, and 8 client tests). Note: the final run took about 250 seconds because the login lockout test performs repeated password hashing.
+- `npm.cmd --workspace server run check`: passed. The Vite production build with `--configLoader native` passed; Vite transformed 16 modules and produced JS 234.59 kB (72.90 kB gzip) and CSS 6.65 kB (2.05 kB gzip).
+- `git diff --check`: passed. No authenticated browser walkthrough or fresh Actions run was verified. The question-management follow-up is not yet merged.
 
 ## Earlier local verification — 24 October 2026 (before PR #28 merge was verified)
 
