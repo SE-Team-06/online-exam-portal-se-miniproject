@@ -108,13 +108,81 @@ app.post('/api/exams', authenticate, requireRole('Instructor', 'Administrator'),
     res.status(201).json({ id: exam.id, title: exam.title, status: exam.status });
   } catch (e) { next(e); }
 });
+
 app.get('/api/exams', authenticate, async (req, res, next) => {
   try {
-    const filter = req.user.role === 'Student' ? { status: 'Published', assignedStudentIds: req.user._id } : { ownerId: req.user._id };
+    const now = new Date();
+
+    const filter = req.user.role === 'Student'
+      ? {
+          status: 'Published',
+          assignedStudentIds: req.user._id,
+        }
+      : { ownerId: req.user._id };
+
     const exams = await Exam.find(filter).sort({ startAt: 1 });
-    res.json({ exams: exams.map((e) => ({ id: e.id, title: e.title, startAt: e.startAt, endAt: e.endAt, durationMinutes: e.durationMinutes, status: e.status })) });
-  } catch (e) { next(e); }
+
+    if (req.user.role !== 'Student') {
+      return res.json({
+        exams: exams.map((e) => ({
+          id: e.id,
+          title: e.title,
+          startAt: e.startAt,
+          endAt: e.endAt,
+          durationMinutes: e.durationMinutes,
+          status: e.status,
+        })),
+      });
+    }
+
+    const attempts = await Attempt.find({
+      studentId: req.user._id,
+      examId: { $in: exams.map((e) => e._id) },
+    });
+
+    const attemptsByExam = new Map(
+      attempts.map((a) => [String(a.examId), a])
+    );
+
+    res.json({
+      exams: exams.map((e) => {
+        const attempt = attemptsByExam.get(String(e._id));
+
+        let studentStatus;
+
+        if (attempt?.status === 'IN_PROGRESS' && attempt.endsAt > now) {
+  studentStatus = 'Open';
+} else if (attempt) {
+  studentStatus = 'Attempted';
+} else if (now < e.startAt) {
+  studentStatus = 'Upcoming';
+} else if (now < e.endAt) {
+  studentStatus = 'Open';
+} else {
+  studentStatus = 'Missed';
+}
+
+        return {
+          id: e.id,
+          title: e.title,
+          startAt: e.startAt,
+          endAt: e.endAt,
+          durationMinutes: e.durationMinutes,
+          status: e.status,
+          studentStatus,
+          canResume:
+  attempt?.status === 'IN_PROGRESS' &&
+  attempt.endsAt > now &&
+  now < e.endAt,
+
+        };
+      }),
+    });
+  } catch (e) {
+    next(e);
+  }
 });
+
 app.post('/api/exams/:examId/attempts', authenticate, requireRole('Student'), requireCsrf, async (req, res, next) => {
   try {
     if (!objectId.safeParse(req.params.examId).success) return sendError(res, 400, 'INVALID_ID', 'Invalid exam identifier.');
