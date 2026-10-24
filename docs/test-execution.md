@@ -1,6 +1,19 @@
 # Local test execution record
 
-## Presentation-readiness verification — 13 October 2026 (latest)
+## Current verification — 24 October 2026
+
+- Fetched refs show PR #28 merged to `main` at `88c21bcf2d887fcc9f5381e509523592167142bb` and PR #30 merged at `17cdedda37b70f6f3b93f4b3c9a5b868505b2f8d`. Both feature commits are in the current `origin/main` ancestry. This verifies local fetched history, not the current live Actions result.
+- On local branch `feature/issue-4-5-authoring-validation` based on `origin/main` at `17cdedda37b70f6f3b93f4b3c9a5b868505b2f8d`, API validation now rejects end-before-start schedules, duplicate question selection, and exam assignment to active but unverified student accounts. This follow-up is not yet published.
+- `npm.cmd test`: **24 passed, 0 failed, 0 skipped** (14 API workflow tests, 3 scoring tests, and 7 client tests).
+- `npm.cmd --workspace server run check`: passed. `npm.cmd --workspace client run build -- --configLoader native`: passed; Vite transformed 16 modules and produced JS 233.36 kB (72.51 kB gzip) and CSS 6.65 kB (2.05 kB gzip). The native config loader avoids the known temporary-file EPERM through the shared dependency junction.
+- `git diff --check`: passed. No authenticated browser walkthrough, live issue #4/#5 criteria reread, or fresh Actions run was verified. Question/exam editing and deletion remain unimplemented; whether they block these GitHub issues cannot be confirmed without their live acceptance criteria.
+
+## Earlier local verification — 24 October 2026 (before PR #28 merge was verified)
+
+- `feature/chhavi-sprint1-issues` was pushed and later merged as PR #28; see the current verification above. The original statements that the branch was pending/unpushed are superseded by the fetched merge commit evidence.
+- At that earlier point, `npm.cmd test` passed 15 tests and `npm.cmd run build` passed. Those results are historical and are superseded by the current 22-test run above.
+
+## Presentation-readiness verification — 13 October 2026 (historical baseline)
 
 - The user ran `npm.cmd ci` in this checkout; their terminal output reported 184 packages added, 187 audited, and 0 vulnerabilities. The PowerShell `npm` alias to `npm.ps1` was blocked by execution policy, so the `.cmd` entry point was used without changing policy.
 - Independently reran `npm.cmd test` and `npm.cmd run build` from the actual `work/repo` checkout on `feature/mvp-exam-workflow` with Node.js v22.21.0 and npm 10.9.4. Tests passed **12/12** (9 API workflow tests and 3 scoring tests; 0 failed/skipped). Server syntax checks passed. Vite production build passed, transforming 15 modules; emitted JS was 227.05 kB (71.03 kB gzip), CSS 5.13 kB (1.71 kB gzip).

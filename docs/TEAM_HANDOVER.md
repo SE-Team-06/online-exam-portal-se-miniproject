@@ -1,6 +1,6 @@
 # Online Exam Portal — Team Handover
 
-**As of:** 13 October 2026
+**As of:** 24 October 2026
 **Course:** Software Engineering (UE24CS341A), PES University
 **Team:** 6
 **Confirmed Product Owner/team lead:** Chhavi Siddarth Wadhwa
@@ -9,9 +9,9 @@ This handover describes the current local implementation and project setup. The 
 
 ## Project and repository
 
-The project is a browser-based multiple-choice online examination portal with student, instructor, and administrator roles, as specified in the SRS. The repository is [online-exam-portal-se-miniproject](https://github.com/chhavi2308-s/online-exam-portal-se-miniproject).
+The project is a browser-based multiple-choice online examination portal with student, instructor, and administrator roles, as specified in the SRS. The canonical repository is [SE-Team-06/online-exam-portal-se-miniproject](https://github.com/SE-Team-06/online-exam-portal-se-miniproject).
 
-The implementation uses React and Vite for the web client, Node.js/Express for the API, MongoDB/Mongoose for data, and npm workspaces. The local branch is `feature/mvp-exam-workflow`, based on the original `main` history at `a83639eed69e604d3b13413b131075b489c7569c`. There have been no pushes or merges. Use `main` for reviewed stable code and focused `feature/`, `fix/`, or `docs/` branches for work.
+The implementation uses React and Vite for the web client, Node.js/Express for the API, MongoDB/Mongoose for data, and npm workspaces. PR #28 merged Chhavi's Sprint 1 work into `main`; the merge commit is `88c21bcf2d887fcc9f5381e509523592167142bb`, with feature tip `9973c2df08a493ecfa2115723da4fa410796b797`. PR #30 merged the correct-answer validation fix at `17cdedda37b70f6f3b93f4b3c9a5b868505b2f8d`, with fix commit `0fd7a765c48e47100dae44731be8a3e088271873`. These Git facts were verified from fetched refs on 24 October 2026. A separate issue #4/#5 validation follow-up is being prepared locally from that `main`; it is not yet committed, pushed, or reviewed. Use focused feature branches and owner-reviewed PRs for integration.
 
 ## What exists now
 
@@ -21,12 +21,13 @@ The implementation uses React and Vite for the web client, Node.js/Express for t
 - Instructor APIs to create MCQs and create, publish, and assign exams.
 - Student assigned-exam listing, one-attempt start/resume, answer saving/flagging, manual submission, server-side scoring, expiry auto-submit, and student-owned result lookup.
 - Focus-loss event endpoint with persisted timestamps and selected audit records.
-- React login, student exam flow/result view, and an instructor exam-list view. There is not a complete instructor authoring UI.
+- React login, student exam flow/result view, instructor question-bank create/list view, and instructor exam configure/publish/assign view. Question/exam editing and deletion are not implemented. PR #28 is merged; the merged UI has not had a separately verified authenticated browser acceptance walkthrough.
 - Temporary demo with disposable MongoDB, seeded instructor/student accounts, and one short sample exam.
 
 ### What was observed
 
 - **User-reported manual check:** Chhavi opened the local demo, logged in as the instructor, and saw a subject. No additional manual feature verification is implied.
+- **Automated verification on 24 October:** `npm.cmd test` passed 24/24 after adding exam schedule, duplicate question selection, and verified-student assignment coverage; the server syntax check, Vite production build with `--configLoader native`, and `git diff --check` passed. Details are in [test execution](test-execution.md). These results do not replace an authenticated browser acceptance walkthrough. GitHub issue descriptions #4/#5 could not be re-read in this environment, so closure against every live acceptance criterion remains unverified.
 - **Locally verified smoke check on 13 October 2026:** `npm run demo` started the API and Vite; `/api/health` returned HTTP 200 with `{"status":"ok"}` and `/` returned HTTP 200. The service was stopped afterward.
 - The local automated tests and build results are in [test-execution.md](test-execution.md). The updated RTM is [RTM_Online_Exam_Portal.xlsx](../SRS/RTM_Online_Exam_Portal.xlsx); its `Implementation Evidence` sheet records 53 requirement statuses with local evidence/gaps. No complete SRS requirement is marked complete merely because a partial path exists.
 
@@ -35,7 +36,7 @@ The implementation uses React and Vite for the web client, Node.js/Express for t
 Requirements: Windows PowerShell, Node.js 22.12 or newer, and npm.
 
 ```powershell
-git clone https://github.com/chhavi2308-s/online-exam-portal-se-miniproject.git
+git clone https://github.com/SE-Team-06/online-exam-portal-se-miniproject.git
 cd online-exam-portal-se-miniproject
 npm.cmd ci
 npm.cmd test
@@ -111,6 +112,12 @@ Local checks actually completed on **13 October 2026**:
 | `npm run demo` smoke | Passed as described above; app processes were stopped after check. |
 
 The exact test mapping and execution limitations are in [test-execution.md](test-execution.md). These tests are implementation tests, not retroactive execution of the submitted STP. No load, accessibility, browser-matrix, production TLS, or backup tests are claimed.
+
+## Current Git verification — 24 October 2026
+
+- Fetched `origin/main` is `17cdedda37b70f6f3b93f4b3c9a5b868505b2f8d`, the PR #30 merge commit. PR #28's merge and feature commits, and PR #30's fix commit, are in its ancestry. The current follow-up branch `feature/issue-4-5-authoring-validation` is based directly on this fetched `origin/main` and contains a local validation follow-up.
+- A fresh GitHub Actions run, current Jira statuses, and current Project board fields/access were not independently checked in this verification. The Jira and Project details below are dated historical snapshots and must not be treated as current without a live readback.
+- The official Part 2 PDF was not present in the repository file listing; the supplied local PDF path was unavailable to this session. Assignment requirements beyond the repository's own documentation therefore remain unverified here.
 
 ## Project management status
 
