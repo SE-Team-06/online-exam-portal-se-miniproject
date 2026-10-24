@@ -54,8 +54,35 @@ app.post('/api/questions', authenticate, requireRole('Instructor', 'Administrato
 });
 app.get('/api/questions', authenticate, requireRole('Instructor', 'Administrator'), async (req, res, next) => {
   try {
-    const questions = await Question.find({ ownerId: req.user._id }).sort({ createdAt: -1 });
-    res.json({ questions: questions.map((q) => ({ id: q.id, text: q.text, options: q.options.map((o) => ({ id: o._id, text: o.text })), marks: q.marks })) });
+    const questions = await Question.find({ ownerId: req.user._id }).select('+correctOptionId').sort({ createdAt: -1 });
+    res.json({ questions: questions.map((q) => ({ id: q.id, text: q.text, options: q.options.map((o) => ({ id: o._id, text: o.text })), correctOptionId: q.correctOptionId, marks: q.marks })) });
+  } catch (e) { next(e); }
+});
+app.put('/api/questions/:questionId', authenticate, requireRole('Instructor', 'Administrator'), requireCsrf, async (req, res, next) => {
+  try {
+    if (!objectId.safeParse(req.params.questionId).success) return sendError(res, 400, 'INVALID_ID', 'Invalid question identifier.');
+    const p = questionInput.safeParse(req.body); if (!p.success) return bad(res, p.error.issues);
+    const question = await Question.findOne({ _id: req.params.questionId, ownerId: req.user._id });
+    if (!question) return sendError(res, 404, 'QUESTION_NOT_FOUND', 'Question not found.');
+    if (await Exam.exists({ questionIds: question._id })) return sendError(res, 409, 'QUESTION_IN_USE', 'Questions used by an exam cannot be edited.');
+    question.text = p.data.text;
+    question.options = p.data.options.map(({ id, text }) => ({ _id: id, text }));
+    question.correctOptionId = p.data.correctOptionId;
+    question.marks = p.data.marks;
+    await question.save();
+    await writeAudit(req, 'QUESTION_UPDATED', { questionId: question.id });
+    res.json({ id: question.id, text: question.text, options: question.options.map((o) => ({ id: o._id, text: o.text })), correctOptionId: question.correctOptionId, marks: question.marks });
+  } catch (e) { next(e); }
+});
+app.delete('/api/questions/:questionId', authenticate, requireRole('Instructor', 'Administrator'), requireCsrf, async (req, res, next) => {
+  try {
+    if (!objectId.safeParse(req.params.questionId).success) return sendError(res, 400, 'INVALID_ID', 'Invalid question identifier.');
+    const question = await Question.findOne({ _id: req.params.questionId, ownerId: req.user._id });
+    if (!question) return sendError(res, 404, 'QUESTION_NOT_FOUND', 'Question not found.');
+    if (await Exam.exists({ questionIds: question._id })) return sendError(res, 409, 'QUESTION_IN_USE', 'Questions used by an exam cannot be deleted.');
+    await question.deleteOne();
+    await writeAudit(req, 'QUESTION_DELETED', { questionId: req.params.questionId });
+    res.status(204).end();
   } catch (e) { next(e); }
 });
 app.get('/api/students', authenticate, requireRole('Instructor', 'Administrator'), async (_req, res, next) => {
@@ -158,7 +185,10 @@ app.get('/api/attempts/:attemptId/result', authenticate, async (req, res, next) 
   } catch (e) { next(e); }
 });
 app.use((_req, res) => sendError(res, 404, 'NOT_FOUND', 'The requested resource was not found.'));
-app.use((err, _req, res, _next) => { console.error('Request failed:', err.message); if (res.headersSent) return; sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected server error occurred.'); });
+app.use((err, _req, res, _next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) return sendError(res, 400, 'INVALID_JSON', 'Request body must be valid JSON.');
+  console.error('Request failed:', err.message); if (res.headersSent) return; sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected server error occurred.');
+});
 
 async function safeQuestions(ids) {
   const docs = await Question.find({ _id: { $in: ids } });
