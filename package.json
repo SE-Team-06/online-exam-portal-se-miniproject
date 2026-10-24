@@ -11,7 +11,7 @@
     "dev:web": "npm --workspace client run dev",
     "demo": "concurrently -k -n api,web -c cyan,magenta \"npm:demo:api\" \"npm:dev:web\"",
     "demo:api": "npm --workspace server run demo",
-    "test": "npm --workspace server test",
+    "test": "npm --workspace server test && npm --workspace client test",
     "build": "npm --workspace server run check && npm --workspace client run build"
   }
 }

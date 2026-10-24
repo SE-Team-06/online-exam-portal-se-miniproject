@@ -49,9 +49,16 @@ Assessment date: 24 October 2026. Source of requirement IDs: submitted SRS v1.2 
 
 ## Assignment-document alignment and risks
 
-- **24 October local branch update:** added the instructor question bank and exam configuration screens plus authenticated question/student list APIs. The changes are local and not yet reviewed or merged. Automated tests cover question-list answer-key redaction, student-roster authorization/privacy, exam configuration persistence, and login/logout role sessions. Passing tests/build do not establish browser usability or full SRS acceptance.
+- **PR #28 merge, verified 24 October:** the instructor question bank and exam configuration screens plus authenticated question/student list APIs are included in `main` at merge commit `88c21bcf2d887fcc9f5381e509523592167142bb`. The merged feature tip is an ancestor of that ref. Automated tests cover question-list answer-key redaction, student-roster authorization/privacy, exam configuration persistence, and login/logout role sessions. A separate optional-answer selection fix is local and unpushed. Passing tests/build do not establish browser usability or full SRS acceptance.
 
 - The repository contains the SRS v1.2, SAD v1.4, STP v1.1, RTM workbook, STRIDE workbook, and three sequence diagrams. The implementation is a MERN slice; API/design conformance has not been established end to end.
 - The test execution log below reports only tests actually run against this MVP, not completed execution of the submitted STP. Test-to-requirement mappings are corrected to match what each test exercises.
 - SRS v1.2 and SAD v1.4 show a related-document version mismatch. The SAD API-07/API-08 presentation also needs review against implemented routes. Preserve the approved documents until the team decides whether to revise them.
 - Temporary demo data and generated passwords are disposable. Do not use real identities or credentials.
+
+
+## Follow-up validation evidence — 24 October 2026
+
+- On local branch `fix/question-correct-option-selection`, regression tests cover retaining a valid correct option, selecting a remaining option when the selected optional answer is cleared, and choosing the first available option when no selection exists.
+- Current checks on that branch: `npm.cmd test` passed 22/22; the server check and Vite production build passed using the native config loader after the default bundled config loader hit a temporary-file EPERM; `git diff --check` passed. This branch is not pushed, so the fix is not in `main`.
+- The official Part 2 PDF was not found in the repository, and the provided local PDF path was unavailable in this session. No new Part 2 completion claim is made from that document.
