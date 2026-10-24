@@ -1,6 +1,14 @@
 # Local test execution record
 
-## Presentation-readiness verification — 13 October 2026 (latest)
+## Chhavi Sprint 1 issues — 24 October 2026
+
+- Branch: `feature/chhavi-sprint1-issues`, based on the last locally available `main-author-fix` commit. The issue/API/UI work is local pending changes; it has not been pushed, reviewed, or merged.
+- `npm.cmd test`: **15 passed, 0 failed, 0 skipped** (12 workflow integration cases and 3 scoring cases). Added coverage verifies login role and logout invalidation, question listing without correct-answer leakage, instructor-only question/student endpoints, student-list data minimization, and exam configuration/publishing with schedule, scoring, question, and assignment values persisted.
+- `npm.cmd run build`: **passed**. Server syntax checks passed; Vite transformed 15 modules and produced JS 232.97 kB (72.42 kB gzip) and CSS 6.65 kB (2.05 kB gzip).
+- `git diff --check`: passed. LF-to-CRLF Git warnings on the changed UI/API files are line-ending notices, not whitespace errors.
+- No authenticated browser walkthrough, GitHub push/PR, owner review/merge, or fresh Actions run was verified. The #2 login/role path is API-tested; #4 question authoring and #5 exam configuration have not yet had a manual UI walkthrough. Question/exam editing and deletion remain outside this slice.
+
+## Presentation-readiness verification — 13 October 2026 (historical baseline)
 
 - The user ran `npm.cmd ci` in this checkout; their terminal output reported 184 packages added, 187 audited, and 0 vulnerabilities. The PowerShell `npm` alias to `npm.ps1` was blocked by execution policy, so the `.cmd` entry point was used without changing policy.
 - Independently reran `npm.cmd test` and `npm.cmd run build` from the actual `work/repo` checkout on `feature/mvp-exam-workflow` with Node.js v22.21.0 and npm 10.9.4. Tests passed **12/12** (9 API workflow tests and 3 scoring tests; 0 failed/skipped). Server syntax checks passed. Vite production build passed, transforming 15 modules; emitted JS was 227.05 kB (71.03 kB gzip), CSS 5.13 kB (1.71 kB gzip).
