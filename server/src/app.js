@@ -64,15 +64,17 @@ app.get('/api/students', authenticate, requireRole('Instructor', 'Administrator'
     res.json({ students: students.map((student) => ({ id: student.id, name: student.name, email: student.email })) });
   } catch (e) { next(e); }
 });
-const examInput = z.object({ title: z.string().trim().min(1).max(160), durationMinutes: z.number().int().min(1).max(600), startAt: z.string().datetime(), endAt: z.string().datetime(), passMark: z.number().min(0), negativeMark: z.number().min(0).max(100).default(0), questionIds: z.array(objectId).min(1), assignedStudentIds: z.array(objectId).default([]), reviewEnabled: z.boolean().default(false) }).refine((e) => new Date(e.endAt) > new Date(e.startAt), 'Exam end must be after start.');
+const examInput = z.object({ title: z.string().trim().min(1).max(160), durationMinutes: z.number().int().min(1).max(600), startAt: z.string().datetime(), endAt: z.string().datetime(), passMark: z.number().min(0), negativeMark: z.number().min(0).max(100).default(0), questionIds: z.array(objectId).min(1), assignedStudentIds: z.array(objectId).default([]), reviewEnabled: z.boolean().default(false) })
+  .refine((e) => new Date(e.endAt) > new Date(e.startAt), 'Exam end must be after start.')
+  .refine((e) => new Set(e.questionIds).size === e.questionIds.length, 'Exam questions must be unique.');
 app.post('/api/exams', authenticate, requireRole('Instructor', 'Administrator'), requireCsrf, async (req, res, next) => {
   try {
     const p = examInput.safeParse(req.body); if (!p.success) return bad(res, p.error.issues);
     const { questionIds, assignedStudentIds, ...fields } = p.data;
     const questions = await Question.find({ _id: { $in: questionIds }, ownerId: req.user._id });
     if (questions.length !== questionIds.length) return sendError(res, 400, 'INVALID_QUESTIONS', 'Every question must exist and belong to you.');
-    const students = assignedStudentIds.length ? await User.find({ _id: { $in: assignedStudentIds }, role: 'Student', active: true }) : [];
-    if (students.length !== assignedStudentIds.length) return sendError(res, 400, 'INVALID_STUDENTS', 'Assignments must refer to active student accounts.');
+    const students = assignedStudentIds.length ? await User.find({ _id: { $in: assignedStudentIds }, role: 'Student', active: true, emailVerified: true }) : [];
+    if (students.length !== assignedStudentIds.length) return sendError(res, 400, 'INVALID_STUDENTS', 'Assignments must refer to active, verified student accounts.');
     if (fields.passMark > questions.reduce((s, q) => s + q.marks, 0)) return sendError(res, 400, 'INVALID_PASS_MARK', 'Pass mark cannot exceed the maximum score.');
     const exam = await Exam.create({ ...fields, ownerId: req.user._id, questionIds, assignedStudentIds, status: 'Published' });
     await writeAudit(req, 'EXAM_PUBLISHED', { examId: exam.id });
