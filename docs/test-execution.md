@@ -6,7 +6,7 @@
 - `npm.cmd test`: **15 passed, 0 failed, 0 skipped** (12 workflow integration cases and 3 scoring cases). Added coverage verifies login role and logout invalidation, question listing without correct-answer leakage, instructor-only question/student endpoints, student-list data minimization, and exam configuration/publishing with schedule, scoring, question, and assignment values persisted.
 - `npm.cmd run build`: **passed**. Server syntax checks passed; Vite transformed 15 modules and produced JS 232.97 kB (72.42 kB gzip) and CSS 6.65 kB (2.05 kB gzip).
 - `git diff --check`: passed. LF-to-CRLF Git warnings on the changed UI/API files are line-ending notices, not whitespace errors.
-- No authenticated browser walkthrough, GitHub push/PR, owner review/merge, or fresh Actions run was verified. The #2 login/role path is API-tested; #4 question authoring and #5 exam configuration have not yet had a manual UI walkthrough. Question/exam editing and deletion remain outside this slice.
+- No authenticated browser walkthrough, owner review/merge, or fresh Actions run was verified. One feature-branch push attempt on 24 October failed because this environment could not connect to `github.com:443`; no PR exists from this branch. The #2 login/role path is API-tested; #4 question authoring and #5 exam configuration have not yet had a manual UI walkthrough. Question/exam editing and deletion remain outside this slice.
 
 ## Presentation-readiness verification — 13 October 2026 (historical baseline)
 
