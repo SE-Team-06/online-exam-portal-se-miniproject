@@ -4,8 +4,9 @@ import mongoose from 'mongoose';
 import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server-core';
 import app, { submitExpiredAttempts } from '../src/app.js';
-import { User, Question, Exam, Attempt } from '../src/models/index.js';
+import { User, Question, Exam, Attempt, Session } from '../src/models/index.js';
 import { hashPassword } from '../src/security/password.js';
+import { COOKIE_NAME, newOpaqueToken, hashToken, INACTIVITY_MS } from '../src/security/session.js';
 
 let mongo; let instructor; let student; let stranger; let instructorAgent; let studentAgent; let strangerAgent; let csrfInstructor; let csrfStudent; let csrfStranger; let examId; let questionId; let attemptId;
 const login = async (agent, email) => { const response = await agent.post('/api/auth/login').send({ email, password: 'TestPass123' }).expect(200); return response.body.csrfToken; };
@@ -58,7 +59,7 @@ describe('SRS-aligned exam workflow', () => {
     const listed = await instructorAgent.get('/api/questions').expect(200);
     assert.equal(listed.body.questions.length, 1);
     assert.equal(listed.body.questions[0].id, questionId);
-    assert.equal(listed.body.questions[0].correctOptionId, undefined);
+    assert.equal(listed.body.questions[0].correctOptionId, 'a');
     assert.deepEqual(listed.body.questions[0].options.map((option) => option.id), ['a', 'b']);
     const students = await instructorAgent.get('/api/students').expect(200);
     assert.deepEqual(students.body.students.map((entry) => entry.email).sort(), ['lockout@example.test', 's@example.test', 'x@example.test']);
@@ -67,6 +68,52 @@ describe('SRS-aligned exam workflow', () => {
   it('validates question structure and exam references', async () => {
     await instructorAgent.post('/api/questions').set('x-csrf-token', csrfInstructor).send({ text: 'Bad', options: [{ id: 'a', text: 'A' }, { id: 'a', text: 'Duplicate' }], correctOptionId: 'z', marks: 1 }).expect(400);
     await instructorAgent.post('/api/exams').set('x-csrf-token', csrfInstructor).send({ title: 'Bad', durationMinutes: 5, startAt: new Date().toISOString(), endAt: new Date(Date.now() + 10000).toISOString(), passMark: 1, questionIds: [String(new mongoose.Types.ObjectId())] }).expect(400);
+  });
+  it('supports owner-scoped question editing and deletion with safe validation', async () => {
+    const created = await instructorAgent.post('/api/questions').set('x-csrf-token', csrfInstructor).send({
+      text: 'Temporary question', options: [{ id: 'first', text: 'First' }, { id: 'second', text: 'Second' }], correctOptionId: 'second', marks: 1,
+    }).expect(201);
+    const id = created.body.id;
+    const otherInstructor = await User.create({ name: 'Other Instructor', email: 'other-i@example.test', passwordHash: await hashPassword('TestPass123'), role: 'Instructor', emailVerified: true });
+    const otherToken = newOpaqueToken();
+    const otherCsrf = newOpaqueToken();
+    const now = new Date();
+    await Session.create({ tokenHash: hashToken(otherToken), csrfToken: otherCsrf, userId: otherInstructor._id, lastActivity: now, expiresAt: new Date(now.getTime() + INACTIVITY_MS) });
+    const cookie = `${COOKIE_NAME}=${otherToken}`;
+    const otherAgent = {
+      put: (path) => request(app).put(path).set('Cookie', cookie),
+      delete: (path) => request(app).delete(path).set('Cookie', cookie),
+    };
+
+    await studentAgent.put(`/api/questions/${id}`).set('x-csrf-token', csrfStudent).send({}).expect(403);
+    await studentAgent.delete(`/api/questions/${id}`).set('x-csrf-token', csrfStudent).expect(403);
+    await otherAgent.put(`/api/questions/${id}`).set('x-csrf-token', otherCsrf).send({ text: 'No', options: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], correctOptionId: 'a', marks: 1 }).expect(404);
+    await otherAgent.delete(`/api/questions/${id}`).set('x-csrf-token', otherCsrf).expect(404);
+    await instructorAgent.put('/api/questions/not-an-id').set('x-csrf-token', csrfInstructor).send({}).expect(400);
+    await instructorAgent.put(`/api/questions/${new mongoose.Types.ObjectId()}`).set('x-csrf-token', csrfInstructor).send({}).expect(400);
+    await instructorAgent.put(`/api/questions/${id}`).set('x-csrf-token', csrfInstructor).send({ text: 'Changed', options: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], correctOptionId: 'missing', marks: 1 }).expect(400);
+    await instructorAgent.put(`/api/questions/${id}`).set('x-csrf-token', csrfInstructor).send({ text: 'Changed', options: [{ id: 'a', text: 'A' }, { id: 'b', text: '   ' }], correctOptionId: 'a', marks: 1 }).expect(400);
+    await instructorAgent.put(`/api/questions/${new mongoose.Types.ObjectId()}`).set('x-csrf-token', csrfInstructor).send({ text: 'Changed', options: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], correctOptionId: 'a', marks: 1 }).expect(404);
+
+    const updated = await instructorAgent.put(`/api/questions/${id}`).set('x-csrf-token', csrfInstructor).send({
+      text: 'Updated temporary question', options: [{ id: 'first', text: 'Updated first' }, { id: 'second', text: 'Updated second' }], correctOptionId: 'first', marks: 3,
+    }).expect(200);
+    assert.equal(updated.body.text, 'Updated temporary question');
+    assert.equal(updated.body.correctOptionId, 'first');
+    assert.equal((await Question.findById(id).select('+correctOptionId')).correctOptionId, 'first');
+    await instructorAgent.delete(`/api/questions/${id}`).set('x-csrf-token', csrfInstructor).expect(204);
+    await instructorAgent.delete(`/api/questions/${id}`).set('x-csrf-token', csrfInstructor).expect(404);
+  });
+  it('returns a safe validation response for malformed JSON', async () => {
+    const response = await request(app).post('/api/questions').set('Content-Type', 'application/json').send('{"text":');
+    assert.equal(response.status, 400);
+    assert.equal(response.body.error.code, 'INVALID_JSON');
+    assert.equal(response.body.error.message, 'Request body must be valid JSON.');
+  });
+  it('prevents editing or deleting a question already referenced by an exam', async () => {
+    const body = { text: 'Changed', options: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], correctOptionId: 'a', marks: 2 };
+    await instructorAgent.put(`/api/questions/${questionId}`).set('x-csrf-token', csrfInstructor).send(body).expect(409);
+    await instructorAgent.delete(`/api/questions/${questionId}`).set('x-csrf-token', csrfInstructor).expect(409);
   });
   it('rejects invalid schedules and duplicate question selections', async () => {
     const startAt = new Date(Date.now() + 60_000).toISOString();
