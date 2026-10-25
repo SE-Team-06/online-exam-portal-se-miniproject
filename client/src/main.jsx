@@ -42,6 +42,7 @@ function App() {
   const [result, setResult] = useState(null);
   const [review, setReview] = useState(null);
   const [previousResults, setPreviousResults] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [busy, setBusy] = useState(false);
   const [questionText, setQuestionText] = useState('');
   const [optionTexts, setOptionTexts] = useState(['', '', '', '', '', '']);
@@ -65,11 +66,15 @@ function App() {
     if (!user) return;
     api('/exams').then((d) => setExams(d.exams)).catch((e) => setError(e.message));
     if (user.role === 'Student') {
-      api('/attempts/mine')
-        .then((d) => setPreviousResults(d.results))
+      Promise.all([api('/attempts/mine'), api('/notifications')])
+        .then(([resultsData, notificationData]) => {
+          setPreviousResults(resultsData.results);
+          setNotifications(notificationData.notifications);
+        })
         .catch((e) => setError(e.message));
     } else {
       setPreviousResults([]);
+      setNotifications([]);
       Promise.all([api('/questions'), api('/students')])
         .then(([questionData, studentData]) => { setQuestions(questionData.questions); setStudents(studentData.students); })
         .catch((e) => setError(e.message));
@@ -166,6 +171,13 @@ setExams(refreshed.exams);
       setAttempt(null); setResult(null); setReview(data.review);
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
+  }
+  async function markNotificationRead(notification) {
+    if (notification.readAt) return;
+    try {
+      const data = await api(`/notifications/${notification.id}/read`, { method: 'PATCH', csrf });
+      setNotifications((current) => current.map((item) => item.id === data.id ? { ...item, readAt: data.readAt } : item));
+    } catch (e) { setError(e.message); }
   }
   function updateOptionText(index, value) {
     const nextOptionTexts = optionTexts.map((text, i) => i === index ? value : text);
@@ -264,7 +276,7 @@ setExams(refreshed.exams);
     {attempt?.status === 'IN_PROGRESS' ? <section className="exam-panel"><div className="exam-top"><div><p className="eyebrow">TIMED EXAM</p><h2>{exams.find((exam) => exam.id === attempt.examId)?.title ?? 'Examination'}</h2></div><div className="timer"><span>TIME REMAINING</span><strong>{String(Math.floor(remaining / 60)).padStart(2, '0')}:{String(remaining % 60).padStart(2, '0')}</strong></div></div>{attemptQuestions.map((question, index) => <article className="question" key={question.id}><p className="question-count">QUESTION {index + 1} <span>{question.marks} point{question.marks === 1 ? '' : 's'}</span></p><h3>{question.text}</h3><div className="options">{question.options.map((option) => <label className={`option ${answers[question.id] === option.id ? 'selected' : ''}`} key={option.id}><input type="radio" name={question.id} checked={answers[question.id] === option.id} onChange={() => save(question.id, option.id)}/><span>{option.text}</span></label>)}</div></article>)}<button className="primary submit" onClick={submit} disabled={busy}>Submit exam</button></section>
       : result ? <section className="result-card"><p className="eyebrow">RESULT</p><h2>{result.passed ? 'Passed' : 'Not passed'}</h2><p className="score">{result.score} <span>/ {result.maximumScore}</span></p><p>{result.correctCount} correct · {result.wrongCount} incorrect · {result.unansweredCount} unanswered</p><button className="text-button" onClick={() => { setResult(null); setReview(null); }}>Back to dashboard</button></section>
       : review ? <section className="exam-panel"><p className="eyebrow">ANSWER REVIEW</p><h2>Review your answers</h2>{review.map((item, index) => <article className="question" key={item.questionId}><p className="question-count">QUESTION {index + 1}</p><h3>{item.text}</h3><p>Your answer: {item.options.find((option) => option.id === item.selectedOptionId)?.text ?? 'Not answered'}</p><p>Correct answer: {item.options.find((option) => option.id === item.correctOptionId)?.text ?? 'Unavailable'}</p></article>)}<button className="text-button" onClick={() => setReview(null)}>Back to dashboard</button></section>
-      : user.role === 'Student' ? <><section className="exam-list"><div className="section-heading"><div><p className="eyebrow">COMPLETED WORK</p><h2>Previous results</h2></div><span className="count">{previousResults.length}</span></div>{previousResults.length ? previousResults.map((item) => <article className="exam-card" key={item.id}><div className="exam-info"><h3>{item.examTitle}</h3><p>Submitted {item.submittedAt ? new Date(item.submittedAt).toLocaleString() : ''}</p><p>Score: {item.score} / {item.maximumScore} · {item.passed ? 'Passed' : 'Not passed'}</p></div><button className="primary compact" onClick={() => viewResult(item.id)} disabled={busy}>View result</button>{item.reviewAvailable && <button className="text-button" onClick={() => viewReview(item.id)} disabled={busy}>View review</button>}</article>) : <p className="empty">No submitted results yet.</p>}</section><section className="exam-list"><div className="section-heading"><div><p className="eyebrow">YOUR WORK</p><h2>Assigned exams</h2></div><span className="count">{exams.length} exam{exams.length === 1 ? '' : 's'}</span></div>{exams.length ? exams.map((exam) => <article className="exam-card" key={exam.id}><div className="exam-icon">✦</div><div className="exam-info"><h3>{exam.title}</h3><p>{exam.durationMinutes} minutes · Opens {new Date(exam.startAt).toLocaleString()}</p></div>
+      : user.role === 'Student' ? <><section className="exam-list"><div className="section-heading"><div><p className="eyebrow">UPDATES</p><h2>Notifications</h2></div><span className="count">{notifications.filter((item) => !item.readAt).length} unread</span></div>{notifications.length ? notifications.map((notification) => <article className={`notification-card ${notification.readAt ? '' : 'unread'}`} key={notification.id} onClick={() => markNotificationRead(notification)}><div className="notification-icon">{notification.type === 'RESULT_RELEASED' ? '✓' : '!'}</div><div className="exam-info"><h3>{notification.title}</h3><p>{notification.message}</p><small>{new Date(notification.createdAt).toLocaleString()}</small></div>{!notification.readAt && <span className="notification-dot" aria-label="Unread notification" />}</article>) : <p className="empty">No notifications yet.</p>}</section><section className="exam-list"><div className="section-heading"><div><p className="eyebrow">COMPLETED WORK</p><h2>Previous results</h2></div><span className="count">{previousResults.length}</span></div>{previousResults.length ? previousResults.map((item) => <article className="exam-card" key={item.id}><div className="exam-info"><h3>{item.examTitle}</h3><p>Submitted {item.submittedAt ? new Date(item.submittedAt).toLocaleString() : ''}</p><p>Score: {item.score} / {item.maximumScore} · {item.passed ? 'Passed' : 'Not passed'}</p></div><button className="primary compact" onClick={() => viewResult(item.id)} disabled={busy}>View result</button>{item.reviewAvailable && <button className="text-button" onClick={() => viewReview(item.id)} disabled={busy}>View review</button>}</article>) : <p className="empty">No submitted results yet.</p>}</section><section className="exam-list"><div className="section-heading"><div><p className="eyebrow">YOUR WORK</p><h2>Assigned exams</h2></div><span className="count">{exams.length} exam{exams.length === 1 ? '' : 's'}</span></div>{exams.length ? exams.map((exam) => <article className="exam-card" key={exam.id}><div className="exam-icon">✦</div><div className="exam-info"><h3>{exam.title}</h3><p>{exam.durationMinutes} minutes · Opens {new Date(exam.startAt).toLocaleString()}</p></div>
 <div className="exam-actions">
   <span
     className={`status-badge status-${(exam.studentStatus ?? 'Upcoming').toLowerCase()}`}
