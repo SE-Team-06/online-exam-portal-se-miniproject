@@ -14,6 +14,7 @@ app.set('trust proxy', 1);
 app.use(helmet());
 app.use(express.json({ limit: '32kb' }));
 const loginLimit = rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
+const FINALIZATION_LEASE_MS = 60_000;
 const bad = (res, issues) => sendError(res, 400, 'VALIDATION_ERROR', issues[0]?.message ?? 'Invalid request.');
 const asPublicUser = (user) => ({ id: user.id, name: user.name, email: user.email, role: user.role });
 const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid identifier.');
@@ -251,7 +252,10 @@ app.get('/api/attempts/:attemptId', authenticate, requireRole('Student'), async 
     let attempt = await Attempt.findOne({ _id: req.params.attemptId, studentId: req.user._id });
     if (!attempt) return sendError(res, 404, 'ATTEMPT_NOT_FOUND', 'Attempt not found.');
     const exam = await Exam.findById(attempt.examId);
-    if (attempt.status === 'IN_PROGRESS' && new Date() >= attempt.endsAt) attempt = await finishAttempt(attempt, exam, req);
+    if (attempt.status === 'IN_PROGRESS' && new Date() >= attempt.endsAt) {
+      attempt = await finishAttempt(attempt, exam, req);
+      if (attempt.status !== 'SUBMITTED') return finalizationRetry(res);
+    }
     if (attempt.status === 'SUBMITTED') return res.json({ attempt: resultView(attempt, exam) });
     res.json({ attempt: { id: attempt.id, status: attempt.status, endsAt: attempt.endsAt, answers: attempt.answers }, questions: await safeQuestions(exam.questionIds) });
   } catch (e) { next(e); }
@@ -276,6 +280,7 @@ app.put('/api/attempts/:attemptId/answers/:questionId', authenticate, requireRol
         _id: attempt._id,
         studentId: req.user._id,
         status: 'IN_PROGRESS',
+        finalizationClaimToken: null,
         answers: { $elemMatch: { questionId: answer.questionId } },
         $expr: { $gt: ['$endsAt', '$$NOW'] },
       },
@@ -297,7 +302,14 @@ app.post('/api/attempts/:attemptId/focus-loss', authenticate, requireRole('Stude
   try { const attempt = await Attempt.findOne({ _id: req.params.attemptId, studentId: req.user._id, status: 'IN_PROGRESS' }); if (!attempt) return sendError(res, 404, 'ATTEMPT_NOT_FOUND', 'Active attempt not found.'); attempt.focusEvents.push(new Date()); await attempt.save(); await writeAudit(req, 'FOCUS_LOST', { attemptId: attempt.id }); res.status(204).end(); } catch (e) { next(e); }
 });
 app.post('/api/attempts/:attemptId/submit', authenticate, requireRole('Student'), requireCsrf, async (req, res, next) => {
-  try { const attempt = await Attempt.findOne({ _id: req.params.attemptId, studentId: req.user._id }); if (!attempt) return sendError(res, 404, 'ATTEMPT_NOT_FOUND', 'Active attempt not found.'); const exam = await Exam.findById(attempt.examId); const submitted = await finishAttempt(attempt, exam, req); res.json({ attempt: resultView(submitted, exam) }); } catch (e) { next(e); }
+  try {
+    const attempt = await Attempt.findOne({ _id: req.params.attemptId, studentId: req.user._id });
+    if (!attempt) return sendError(res, 404, 'ATTEMPT_NOT_FOUND', 'Active attempt not found.');
+    const exam = await Exam.findById(attempt.examId);
+    const submitted = await finishAttempt(attempt, exam, req);
+    if (submitted.status !== 'SUBMITTED') return finalizationRetry(res);
+    res.json({ attempt: resultView(submitted, exam) });
+  } catch (e) { next(e); }
 });
 
 
@@ -387,18 +399,58 @@ async function safeQuestions(ids) {
 }
 async function finishAttempt(attempt, exam, req = null) {
   if (attempt.status === 'SUBMITTED') return persistSubmissionAudit(attempt);
-  const questions = await Question.find({ _id: { $in: exam.questionIds } }).select('+correctOptionId');
-  const scored = calculateScore(questions, attempt.answers, exam.negativeMark, exam.passMark);
-  const submitted = await Attempt.findOneAndUpdate(
-    { _id: attempt._id, status: 'IN_PROGRESS' },
-    { $set: { ...scored, status: 'SUBMITTED', submittedAt: new Date(), submissionAuditPending: true, submissionAutomatic: req === null } },
+  const now = new Date();
+  const claimToken = newOpaqueToken();
+  const claimed = await Attempt.findOneAndUpdate(
+    {
+      _id: attempt._id,
+      status: 'IN_PROGRESS',
+      $or: [
+        { finalizationClaimUntil: null },
+        { finalizationClaimUntil: { $lte: now } },
+      ],
+    },
+    { $set: { finalizationClaimToken: claimToken, finalizationClaimUntil: new Date(now.getTime() + FINALIZATION_LEASE_MS) } },
     { returnDocument: 'after' },
   );
-  if (!submitted) {
+  if (!claimed) {
     const current = await Attempt.findById(attempt._id);
     return current?.status === 'SUBMITTED' ? persistSubmissionAudit(current) : current ?? attempt;
   }
-  return persistSubmissionAudit(submitted);
+
+  try {
+    if (!exam) throw new Error('Cannot finalize an attempt without its exam configuration.');
+    const questions = await Question.find({ _id: { $in: exam.questionIds } }).select('+correctOptionId');
+    const scored = calculateScore(questions, claimed.answers, exam.negativeMark, exam.passMark);
+    const submitted = await Attempt.findOneAndUpdate(
+      {
+        _id: claimed._id,
+        status: 'IN_PROGRESS',
+        finalizationClaimToken: claimToken,
+        $expr: { $gt: ['$finalizationClaimUntil', '$$NOW'] },
+      },
+      {
+        $set: { ...scored, status: 'SUBMITTED', submittedAt: new Date(), submissionAuditPending: true, submissionAutomatic: req === null },
+        $unset: { finalizationClaimToken: 1, finalizationClaimUntil: 1 },
+      },
+      { returnDocument: 'after' },
+    );
+    if (!submitted) {
+      const current = await Attempt.findById(claimed._id);
+      return current?.status === 'SUBMITTED' ? persistSubmissionAudit(current) : current ?? claimed;
+    }
+    return persistSubmissionAudit(submitted);
+  } catch (error) {
+    await Attempt.updateOne(
+      { _id: claimed._id, status: 'IN_PROGRESS', finalizationClaimToken: claimToken },
+      { $set: { finalizationClaimToken: null, finalizationClaimUntil: null } },
+    );
+    throw error;
+  }
+}
+function finalizationRetry(res) {
+  res.setHeader('Retry-After', '1');
+  return sendError(res, 409, 'FINALIZATION_IN_PROGRESS', 'Attempt finalization is in progress. Retry shortly.');
 }
 async function persistSubmissionAudit(attempt) {
   if (!attempt.submissionAuditPending) return attempt;

@@ -452,7 +452,7 @@ describe('SRS-aligned exam workflow', () => {
       Question.findById = originalFindById;
     }
   });
-  it('finalizes once when manual submission overlaps expiry processing', async () => {
+  it('allows only one scorer when manual submission overlaps expiry processing', async () => {
     const exam = await Exam.create({ ownerId: instructor._id, title: 'Concurrent timeout', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
     const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).expect(201);
     const id = started.body.attempt.id;
@@ -463,7 +463,9 @@ describe('SRS-aligned exam workflow', () => {
     const originalFind = Question.find;
     let scoringReads = 0;
     let releaseScoring;
-    const bothScoringReads = new Promise((resolve) => { releaseScoring = resolve; });
+    let notifyScoringStarted;
+    const scoringStarted = new Promise((resolve) => { notifyScoringStarted = resolve; });
+    const scoringGate = new Promise((resolve) => { releaseScoring = resolve; });
     Question.find = function (...args) {
       const query = originalFind.apply(this, args);
       const questionIds = args[0]?._id?.$in;
@@ -473,33 +475,102 @@ describe('SRS-aligned exam workflow', () => {
       query.exec = async (...execArgs) => {
         const questions = await originalExec(...execArgs);
         scoringReads += 1;
-        if (scoringReads === 2) releaseScoring();
-        await bothScoringReads;
+        if (scoringReads === 1) {
+          notifyScoringStarted();
+          await scoringGate;
+        }
         return questions;
       };
       return query;
     };
 
+    let expiryWork;
     try {
-      const [manualResponse] = await Promise.all([
-        studentAgent.post(`/api/attempts/${id}/submit`).set('x-csrf-token', csrfStudent).expect(200),
-        submitExpiredAttempts(),
-      ]);
+      expiryWork = submitExpiredAttempts();
+      await scoringStarted;
+      const competingResponse = await studentAgent.post(`/api/attempts/${id}/submit`)
+        .set('x-csrf-token', csrfStudent).expect(409);
+      assert.equal(competingResponse.body.error.code, 'FINALIZATION_IN_PROGRESS');
+      assert.equal(competingResponse.headers['retry-after'], '1');
+      assert.equal(scoringReads, 1);
+      releaseScoring();
+      await expiryWork;
+      const retryResponse = await studentAgent.post(`/api/attempts/${id}/submit`)
+        .set('x-csrf-token', csrfStudent).expect(200);
       const saved = await Attempt.findById(id);
       const submissionLogs = await AuditLog.countDocuments({
         action: 'ATTEMPT_SUBMITTED',
         'details.attemptId': id,
       });
-      assert.equal(scoringReads, 2);
-      assert.equal(manualResponse.body.attempt.status, 'SUBMITTED');
-      assert.equal(manualResponse.body.attempt.score, 2);
+      assert.equal(scoringReads, 1);
+      assert.equal(retryResponse.body.attempt.status, 'SUBMITTED');
+      assert.equal(retryResponse.body.attempt.score, 2);
       assert.equal(saved.status, 'SUBMITTED');
       assert.equal(saved.score, 2);
       assert.equal(saved.correctCount, 1);
       assert.equal(saved.answers[0].selectedOptionId, 'a');
       assert.equal(submissionLogs, 1);
     } finally {
+      releaseScoring();
+      if (expiryWork) await expiryWork.catch(() => {});
       Question.find = originalFind;
+    }
+  });
+  it('recovers a stale finalization claim and fences out the superseded scorer', { timeout: 10_000 }, async () => {
+    const exam = await Exam.create({ ownerId: instructor._id, title: 'Stale claim recovery', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
+    const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).expect(201);
+    const id = started.body.attempt.id;
+    const originalQuestion = await Question.findById(questionId).select('+correctOptionId');
+    await studentAgent.put(`/api/attempts/${id}/answers/${questionId}`).set('x-csrf-token', csrfStudent)
+      .send({ selectedOptionId: 'a' }).expect(200);
+    await Attempt.updateOne({ _id: id }, { $set: { endsAt: new Date(Date.now() - 1000), finalizationClaimToken: 'expired-worker', finalizationClaimUntil: new Date(Date.now() - 1000) } });
+
+    const originalFind = Question.find;
+    let scoringReads = 0;
+    let releaseFirstScorer;
+    let notifyFirstScorer;
+    const firstScorerStarted = new Promise((resolve) => { notifyFirstScorer = resolve; });
+    const firstScorerGate = new Promise((resolve) => { releaseFirstScorer = resolve; });
+    Question.find = function (...args) {
+      const query = originalFind.apply(this, args);
+      const questionIds = args[0]?._id?.$in;
+      if (!questionIds?.some((candidate) => String(candidate) === String(questionId))) return query;
+      const originalExec = query.exec.bind(query);
+      query.exec = async (...execArgs) => {
+        const questions = await originalExec(...execArgs);
+        scoringReads += 1;
+        if (scoringReads === 1) {
+          notifyFirstScorer();
+          await firstScorerGate;
+        }
+        return questions;
+      };
+      return query;
+    };
+
+    let staleWork;
+    try {
+      staleWork = submitExpiredAttempts();
+      await firstScorerStarted;
+      await Attempt.updateOne({ _id: id }, { $set: { finalizationClaimUntil: new Date(Date.now() - 1000) } });
+      await Question.updateOne({ _id: questionId }, { $set: { correctOptionId: 'b' } });
+      await submitExpiredAttempts();
+      releaseFirstScorer();
+      await staleWork;
+
+      const saved = await Attempt.findById(id).select('+finalizationClaimToken +finalizationClaimUntil');
+      assert.equal(scoringReads, 2);
+      assert.equal(saved.status, 'SUBMITTED');
+      assert.equal(saved.score, 0);
+      assert.equal(saved.submissionAuditPending, false);
+      assert.equal(saved.finalizationClaimToken, null);
+      assert.equal(saved.finalizationClaimUntil, null);
+      assert.equal(await AuditLog.countDocuments({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id }), 1);
+    } finally {
+      releaseFirstScorer();
+      if (staleWork) await staleWork.catch(() => {});
+      Question.find = originalFind;
+      await Question.updateOne({ _id: questionId }, { $set: { correctOptionId: originalQuestion.correctOptionId } });
     }
   });
   it('returns 429 after ten login attempts from the same IP in one minute', async () => {
