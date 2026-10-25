@@ -44,8 +44,11 @@ export function requireRole(...roles) {
 
 export function requireCsrf(req, res, next) {
   const origin = req.get('origin');
-  const allowedOrigin = process.env.APP_ORIGIN ?? 'http://localhost:5173';
-  if (origin && origin !== allowedOrigin) {
+  const allowedOrigins = (process.env.APP_ORIGIN ?? 'http://localhost:5173,http://127.0.0.1:5173')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (origin && !allowedOrigins.includes(origin)) {
     return sendError(res, 403, 'CSRF_INVALID', 'Request origin is not allowed.');
   }
   if (!tokensMatch(req.get('x-csrf-token'), req.sessionRecord?.csrfToken)) {
