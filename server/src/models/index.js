@@ -89,9 +89,20 @@ auditLogSchema.index(
   },
 );
 
+const notificationSchema = new Schema({
+  recipientId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  type: { type: String, enum: ['EXAM_ASSIGNED', 'RESULT_RELEASED'], required: true },
+  referenceId: { type: Schema.Types.ObjectId, required: true },
+  title: { type: String, required: true, maxlength: 160 },
+  message: { type: String, required: true, maxlength: 500 },
+  readAt: { type: Date, default: null },
+}, { timestamps: true });
+notificationSchema.index({ recipientId: 1, type: 1, referenceId: 1 }, { unique: true });
+
 export const User = model('User', userSchema);
 export const Session = model('Session', sessionSchema);
 export const Question = model('Question', questionSchema);
 export const Exam = model('Exam', examSchema);
 export const Attempt = model('Attempt', attemptSchema);
 export const AuditLog = model('AuditLog', auditLogSchema);
+export const Notification = model('Notification', notificationSchema);
