@@ -248,10 +248,10 @@ app.get('/api/attempts/mine', authenticate, requireRole('Student'), async (req, 
 });
 app.get('/api/attempts/:attemptId', authenticate, requireRole('Student'), async (req, res, next) => {
   try {
-    const attempt = await Attempt.findOne({ _id: req.params.attemptId, studentId: req.user._id });
+    let attempt = await Attempt.findOne({ _id: req.params.attemptId, studentId: req.user._id });
     if (!attempt) return sendError(res, 404, 'ATTEMPT_NOT_FOUND', 'Attempt not found.');
     const exam = await Exam.findById(attempt.examId);
-    if (attempt.status === 'IN_PROGRESS' && new Date() >= attempt.endsAt) await finishAttempt(attempt, exam, req);
+    if (attempt.status === 'IN_PROGRESS' && new Date() >= attempt.endsAt) attempt = await finishAttempt(attempt, exam, req);
     if (attempt.status === 'SUBMITTED') return res.json({ attempt: resultView(attempt, exam) });
     res.json({ attempt: { id: attempt.id, status: attempt.status, endsAt: attempt.endsAt, answers: attempt.answers }, questions: await safeQuestions(exam.questionIds) });
   } catch (e) { next(e); }
@@ -278,7 +278,7 @@ app.post('/api/attempts/:attemptId/focus-loss', authenticate, requireRole('Stude
   try { const attempt = await Attempt.findOne({ _id: req.params.attemptId, studentId: req.user._id, status: 'IN_PROGRESS' }); if (!attempt) return sendError(res, 404, 'ATTEMPT_NOT_FOUND', 'Active attempt not found.'); attempt.focusEvents.push(new Date()); await attempt.save(); await writeAudit(req, 'FOCUS_LOST', { attemptId: attempt.id }); res.status(204).end(); } catch (e) { next(e); }
 });
 app.post('/api/attempts/:attemptId/submit', authenticate, requireRole('Student'), requireCsrf, async (req, res, next) => {
-  try { const attempt = await Attempt.findOne({ _id: req.params.attemptId, studentId: req.user._id, status: 'IN_PROGRESS' }); if (!attempt) return sendError(res, 404, 'ATTEMPT_NOT_FOUND', 'Active attempt not found.'); const exam = await Exam.findById(attempt.examId); await finishAttempt(attempt, exam, req); res.json({ attempt: resultView(attempt, exam) }); } catch (e) { next(e); }
+  try { const attempt = await Attempt.findOne({ _id: req.params.attemptId, studentId: req.user._id }); if (!attempt) return sendError(res, 404, 'ATTEMPT_NOT_FOUND', 'Active attempt not found.'); const exam = await Exam.findById(attempt.examId); const submitted = await finishAttempt(attempt, exam, req); res.json({ attempt: resultView(submitted, exam) }); } catch (e) { next(e); }
 });
 
 
@@ -370,9 +370,14 @@ async function finishAttempt(attempt, exam, req = null) {
   if (attempt.status === 'SUBMITTED') return attempt;
   const questions = await Question.find({ _id: { $in: exam.questionIds } }).select('+correctOptionId');
   const scored = calculateScore(questions, attempt.answers, exam.negativeMark, exam.passMark);
-  Object.assign(attempt, scored, { status: 'SUBMITTED', submittedAt: new Date() }); await attempt.save();
-  await AuditLog.create({ action: 'ATTEMPT_SUBMITTED', userId: attempt.studentId, details: { examId: exam.id, attemptId: attempt.id, automatic: req === null } });
-  return attempt;
+  const submitted = await Attempt.findOneAndUpdate(
+    { _id: attempt._id, status: 'IN_PROGRESS' },
+    { $set: { ...scored, status: 'SUBMITTED', submittedAt: new Date() } },
+    { returnDocument: 'after' },
+  );
+  if (!submitted) return (await Attempt.findById(attempt._id)) ?? attempt;
+  await AuditLog.create({ action: 'ATTEMPT_SUBMITTED', userId: submitted.studentId, details: { examId: exam.id, attemptId: submitted.id, automatic: req === null } });
+  return submitted;
 }
 function resultView(attempt, exam) { return { id: attempt.id, status: attempt.status, score: attempt.score, maximumScore: attempt.maximumScore, passed: attempt.passed, correctCount: attempt.correctCount, wrongCount: attempt.wrongCount, unansweredCount: attempt.unansweredCount, submittedAt: attempt.submittedAt, reviewAvailable: Boolean(exam.reviewEnabled && new Date() >= exam.endAt) }; }
 
