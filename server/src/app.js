@@ -269,9 +269,28 @@ app.put('/api/attempts/:attemptId/answers/:questionId', authenticate, requireRol
       const question = await Question.findById(answer.questionId).select('+correctOptionId');
       if (!question?.options.some((option) => option._id === p.data.selectedOptionId)) return sendError(res, 400, 'INVALID_OPTION', 'Select an option for this question.');
     }
-    answer.selectedOptionId = p.data.selectedOptionId;
-    if (p.data.flagged !== undefined) answer.flagged = p.data.flagged;
-    await attempt.save(); res.json({ saved: true });
+    const answerUpdate = { 'answers.$[answer].selectedOptionId': p.data.selectedOptionId };
+    if (p.data.flagged !== undefined) answerUpdate['answers.$[answer].flagged'] = p.data.flagged;
+    const saved = await Attempt.updateOne(
+      {
+        _id: attempt._id,
+        studentId: req.user._id,
+        status: 'IN_PROGRESS',
+        answers: { $elemMatch: { questionId: answer.questionId } },
+        $expr: { $gt: ['$endsAt', '$$NOW'] },
+      },
+      { $set: answerUpdate },
+      { arrayFilters: [{ 'answer.questionId': answer.questionId }] },
+    );
+    if (saved.matchedCount !== 1) {
+      const current = await Attempt.findOne({ _id: attempt._id, studentId: req.user._id });
+      if (!current) return sendError(res, 404, 'ATTEMPT_NOT_FOUND', 'Active attempt not found.');
+      if (current.status === 'IN_PROGRESS' && new Date() >= current.endsAt) {
+        await finishAttempt(current, await Exam.findById(current.examId), req);
+      }
+      return sendError(res, 409, 'ATTEMPT_ENDED', 'The attempt has ended.');
+    }
+    res.json({ saved: true });
   } catch (e) { next(e); }
 });
 app.post('/api/attempts/:attemptId/focus-loss', authenticate, requireRole('Student'), requireCsrf, async (req, res, next) => {
@@ -367,17 +386,38 @@ async function safeQuestions(ids) {
   return ids.map((id) => { const q = docs.find((d) => String(d._id) === String(id)); return { id: String(id), text: q.text, options: q.options.map((o) => ({ id: o._id, text: o.text })), marks: q.marks }; });
 }
 async function finishAttempt(attempt, exam, req = null) {
-  if (attempt.status === 'SUBMITTED') return attempt;
+  if (attempt.status === 'SUBMITTED') return persistSubmissionAudit(attempt);
   const questions = await Question.find({ _id: { $in: exam.questionIds } }).select('+correctOptionId');
   const scored = calculateScore(questions, attempt.answers, exam.negativeMark, exam.passMark);
   const submitted = await Attempt.findOneAndUpdate(
     { _id: attempt._id, status: 'IN_PROGRESS' },
-    { $set: { ...scored, status: 'SUBMITTED', submittedAt: new Date() } },
+    { $set: { ...scored, status: 'SUBMITTED', submittedAt: new Date(), submissionAuditPending: true, submissionAutomatic: req === null } },
     { returnDocument: 'after' },
   );
-  if (!submitted) return (await Attempt.findById(attempt._id)) ?? attempt;
-  await AuditLog.create({ action: 'ATTEMPT_SUBMITTED', userId: submitted.studentId, details: { examId: exam.id, attemptId: submitted.id, automatic: req === null } });
-  return submitted;
+  if (!submitted) {
+    const current = await Attempt.findById(attempt._id);
+    return current?.status === 'SUBMITTED' ? persistSubmissionAudit(current) : current ?? attempt;
+  }
+  return persistSubmissionAudit(submitted);
+}
+async function persistSubmissionAudit(attempt) {
+  if (!attempt.submissionAuditPending) return attempt;
+  try {
+    await AuditLog.create({
+      action: 'ATTEMPT_SUBMITTED',
+      userId: attempt.studentId,
+      details: { examId: attempt.examId, attemptId: attempt.id, automatic: attempt.submissionAutomatic },
+    });
+  } catch (error) {
+    if (error.code !== 11000) throw error;
+    const existing = await AuditLog.exists({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': attempt.id });
+    if (!existing) throw error;
+  }
+  return (await Attempt.findOneAndUpdate(
+    { _id: attempt._id, status: 'SUBMITTED', submissionAuditPending: true },
+    { $set: { submissionAuditPending: false } },
+    { returnDocument: 'after' },
+  )) ?? (await Attempt.findById(attempt._id)) ?? attempt;
 }
 function resultView(attempt, exam) { return { id: attempt.id, status: attempt.status, score: attempt.score, maximumScore: attempt.maximumScore, passed: attempt.passed, correctCount: attempt.correctCount, wrongCount: attempt.wrongCount, unansweredCount: attempt.unansweredCount, submittedAt: attempt.submittedAt, reviewAvailable: Boolean(exam.reviewEnabled && new Date() >= exam.endAt) }; }
 
@@ -407,6 +447,9 @@ function examView(exam, includeConfiguration = false) {
 export default app;
 
 export async function submitExpiredAttempts() {
+  const pendingAudits = await Attempt.find({ status: 'SUBMITTED', submissionAuditPending: true }).limit(100);
+  for (const attempt of pendingAudits) await persistSubmissionAudit(attempt);
+
   const now = new Date();
   const expired = await Attempt.find({ status: 'IN_PROGRESS', endsAt: { $lte: now } }).limit(100);
   for (const attempt of expired) {
