@@ -5,7 +5,7 @@ import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server-core';
 import app, { submitExpiredAttempts } from '../src/app.js';
 import { User, Question, Exam, Attempt, AuditLog } from '../src/models/index.js';
-import { hashPassword } from '../src/security/password.js';
+import { hashPassword, verifyPassword } from '../src/security/password.js';
 
 let mongo; let instructor; let student; let stranger; let otherInstructor; let instructorAgent; let studentAgent; let strangerAgent; let otherInstructorAgent; let csrfInstructor; let csrfStudent; let csrfStranger; let csrfOtherInstructor; let examId; let questionId; let attemptId; let loginAddress = 0;
 const login = async (agent, email) => { loginAddress += 1; const response = await agent.post('/api/auth/login').set('x-forwarded-for', `203.0.113.${loginAddress}`).send({ email, password: 'TestPass123' }).expect(200); return response.body.csrfToken; };
@@ -39,6 +39,14 @@ describe('SRS-aligned exam workflow', () => {
     await request(app).get('/api/exams').expect(401);
     await request(app).post('/api/auth/login').send({ email: 'i@example.test', password: 'incorrect' }).expect(401);
   });
+  it('stores a salted password hash and never selects it by default', async () => {
+    const hidden = await User.findById(student._id);
+    const stored = await User.findById(student._id).select('+passwordHash');
+    assert.equal(hidden.passwordHash, undefined);
+    assert.notEqual(stored.passwordHash, 'TestPass123');
+    assert.equal(await verifyPassword('TestPass123', stored.passwordHash), true);
+    assert.notEqual(await hashPassword('TestPass123'), stored.passwordHash);
+  });
   it('returns the signed-in role and invalidates the session on logout', async () => {
     const agent = request.agent(app);
     const csrf = await login(agent, instructor.email);
@@ -51,9 +59,15 @@ describe('SRS-aligned exam workflow', () => {
     const hash = await hashPassword('TestPass123');
     const lockedUser = await User.create({ name: 'Lockout', email: 'lockout@example.test', passwordHash: hash, role: 'Student', emailVerified: true });
     const agent = request.agent(app);
-    for (let i = 0; i < 5; i += 1) await agent.post('/api/auth/login').send({ email: lockedUser.email, password: 'WrongPass123' }).expect(401);
+    for (let i = 0; i < 4; i += 1) await agent.post('/api/auth/login').send({ email: lockedUser.email, password: 'WrongPass123' }).expect(401);
+    const beforeFifthFailure = Date.now();
+    await agent.post('/api/auth/login').send({ email: lockedUser.email, password: 'WrongPass123' }).expect(401);
+    const afterFifthFailure = Date.now();
     const updated = await User.findById(lockedUser._id);
-    assert.ok(updated.lockedUntil > new Date());
+    assert.ok(updated.lockedUntil.getTime() >= beforeFifthFailure + 15 * 60_000);
+    assert.ok(updated.lockedUntil.getTime() <= afterFifthFailure + 15 * 60_000);
+    await agent.post('/api/auth/login').send({ email: lockedUser.email, password: 'TestPass123' }).expect(401);
+    assert.equal((await User.findById(lockedUser._id)).lockedUntil.getTime(), updated.lockedUntil.getTime());
   });
   it('enforces roles and CSRF protection for state changes', async () => {
     await studentAgent.post('/api/questions').set('x-csrf-token', csrfStudent).send({}).expect(403);
@@ -326,6 +340,50 @@ describe('SRS-aligned exam workflow', () => {
     await studentAgent.post(`/api/attempts/${missingId}/submit`).set('x-csrf-token', csrfStudent)
       .expect(404).expect(({ body }) => assert.equal(body.error.code, 'ATTEMPT_NOT_FOUND'));
   });
+  it('recovers a finalized attempt audit after a transient audit-store failure', async () => {
+    const exam = await Exam.create({ ownerId: instructor._id, title: 'Audit recovery', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
+    const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).expect(201);
+    const id = started.body.attempt.id;
+    await studentAgent.put(`/api/attempts/${id}/answers/${questionId}`).set('x-csrf-token', csrfStudent)
+      .send({ selectedOptionId: 'a' }).expect(200);
+    await Attempt.updateOne({ _id: id }, { $set: { endsAt: new Date(Date.now() - 1000) } });
+
+    const originalCreate = AuditLog.create;
+    let failOnce = true;
+    AuditLog.create = function (...args) {
+      if (failOnce && args[0]?.action === 'ATTEMPT_SUBMITTED') {
+        failOnce = false;
+        return Promise.reject(new Error('injected audit-store failure'));
+      }
+      return originalCreate.apply(this, args);
+    };
+    try {
+      await assert.rejects(submitExpiredAttempts(), /injected audit-store failure/);
+    } finally {
+      AuditLog.create = originalCreate;
+    }
+
+    const firstFinalization = await Attempt.findById(id);
+    assert.equal(firstFinalization.status, 'SUBMITTED');
+    assert.equal(firstFinalization.score, 2);
+    assert.equal(firstFinalization.submissionAuditPending, true);
+    assert.equal(await AuditLog.countDocuments({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id }), 0);
+
+    await submitExpiredAttempts();
+
+    const recovered = await Attempt.findById(id);
+    assert.equal(recovered.status, 'SUBMITTED');
+    assert.equal(recovered.score, firstFinalization.score);
+    assert.equal(recovered.submittedAt.getTime(), firstFinalization.submittedAt.getTime());
+    assert.equal(recovered.submissionAuditPending, false);
+    assert.equal(await AuditLog.countDocuments({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id }), 1);
+
+    // Simulate a crash after the audit insert but before clearing the outbox marker.
+    await Attempt.updateOne({ _id: id }, { $set: { submissionAuditPending: true } });
+    await submitExpiredAttempts();
+    assert.equal((await Attempt.findById(id)).submissionAuditPending, false);
+    assert.equal(await AuditLog.countDocuments({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id }), 1);
+  });
   it('finalizes an expired attempt before rejecting a late answer change', async () => {
     const exam = await Exam.create({ ownerId: instructor._id, title: 'Late answer timeout', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
     const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).expect(201);
@@ -344,6 +402,55 @@ describe('SRS-aligned exam workflow', () => {
     assert.equal(saved.score, 2);
     assert.equal(saved.answers[0].selectedOptionId, 'a');
     assert.equal(saved.endsAt.getTime(), expiredAt.getTime());
+  });
+  it('does not save an answer request that passed validation before expiry but reaches storage after finalization', { timeout: 10_000 }, async () => {
+    const exam = await Exam.create({ ownerId: instructor._id, title: 'Answer save race', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
+    const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).expect(201);
+    const id = started.body.attempt.id;
+    await studentAgent.put(`/api/attempts/${id}/answers/${questionId}`).set('x-csrf-token', csrfStudent)
+      .send({ selectedOptionId: 'a' }).expect(200);
+
+    const originalFindById = Question.findById;
+    let releaseQuestionRead;
+    let notifyQuestionRead;
+    const questionReadStarted = new Promise((resolve) => { notifyQuestionRead = resolve; });
+    const releaseQuestionValidation = new Promise((resolve) => { releaseQuestionRead = resolve; });
+    Question.findById = function (...args) {
+      const query = originalFindById.apply(this, args);
+      if (String(args[0]) !== String(questionId)) return query;
+      notifyQuestionRead();
+      const originalExec = query.exec.bind(query);
+      query.exec = async (...execArgs) => {
+        const question = await originalExec(...execArgs);
+        await releaseQuestionValidation;
+        return question;
+      };
+      return query;
+    };
+
+    let pendingAnswerRequest;
+    try {
+      pendingAnswerRequest = studentAgent.put(`/api/attempts/${id}/answers/${questionId}`)
+        .set('x-csrf-token', csrfStudent).send({ selectedOptionId: 'b' }).then((response) => response);
+      await questionReadStarted;
+      const expiredAt = new Date(Date.now() - 1000);
+      await Attempt.updateOne({ _id: id }, { $set: { endsAt: expiredAt } });
+      await submitExpiredAttempts();
+      releaseQuestionRead();
+      const lateResponse = await pendingAnswerRequest;
+      assert.equal(lateResponse.status, 409);
+      assert.equal(lateResponse.body.error.code, 'ATTEMPT_ENDED');
+
+      const saved = await Attempt.findById(id);
+      assert.equal(saved.status, 'SUBMITTED');
+      assert.equal(saved.score, 2);
+      assert.equal(saved.answers[0].selectedOptionId, 'a');
+      assert.equal(saved.endsAt.getTime(), expiredAt.getTime());
+      assert.equal(await AuditLog.countDocuments({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id }), 1);
+    } finally {
+      releaseQuestionRead();
+      Question.findById = originalFindById;
+    }
   });
   it('finalizes once when manual submission overlaps expiry processing', async () => {
     const exam = await Exam.create({ ownerId: instructor._id, title: 'Concurrent timeout', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
@@ -394,5 +501,17 @@ describe('SRS-aligned exam workflow', () => {
     } finally {
       Question.find = originalFind;
     }
+  });
+  it('returns 429 after ten login attempts from the same IP in one minute', async () => {
+    for (let i = 0; i < 10; i += 1) {
+      await request(app).post('/api/auth/login')
+        .set('x-forwarded-for', '192.0.2.99')
+        .send({ email: 'rate-limit@example.test', password: 'InvalidPass123' })
+        .expect(401);
+    }
+    await request(app).post('/api/auth/login')
+      .set('x-forwarded-for', '192.0.2.99')
+      .send({ email: 'rate-limit@example.test', password: 'InvalidPass123' })
+      .expect(429);
   });
 });
