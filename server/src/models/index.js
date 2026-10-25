@@ -60,6 +60,8 @@ const attemptSchema = new Schema({
   answers: [answerSchema],
   focusEvents: [{ type: Date }],
   submittedAt: { type: Date, default: null },
+  submissionAuditPending: { type: Boolean, default: false },
+  submissionAutomatic: { type: Boolean, default: false },
   score: { type: Number, default: null },
   maximumScore: { type: Number, default: null },
   passed: { type: Boolean, default: null },
@@ -76,6 +78,14 @@ const auditLogSchema = new Schema({
   timestamp: { type: Date, required: true, default: Date.now, index: true },
   details: { type: Schema.Types.Mixed, default: {} },
 }, { versionKey: false });
+auditLogSchema.index(
+  { action: 1, 'details.attemptId': 1 },
+  {
+    unique: true,
+    partialFilterExpression: { action: 'ATTEMPT_SUBMITTED' },
+    name: 'unique_attempt_submission_audit',
+  },
+);
 
 export const User = model('User', userSchema);
 export const Session = model('Session', sessionSchema);
