@@ -62,6 +62,8 @@ const attemptSchema = new Schema({
   submittedAt: { type: Date, default: null },
   submissionAuditPending: { type: Boolean, default: false },
   submissionAutomatic: { type: Boolean, default: false },
+  finalizationClaimToken: { type: String, default: null, select: false },
+  finalizationClaimUntil: { type: Date, default: null, select: false },
   score: { type: Number, default: null },
   maximumScore: { type: Number, default: null },
   passed: { type: Boolean, default: null },

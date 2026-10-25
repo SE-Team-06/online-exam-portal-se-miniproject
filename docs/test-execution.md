@@ -1,5 +1,14 @@
 # Local test execution record
 
+## Issue #18 single-scorer follow-up — 25 October 2026
+
+- Tested on `fix/issue-18-single-scorer`, based on the locally available `origin/main` commit `1f8eda1382dff7e277e61759b40ddbec65ac999e`. A fresh fetch was attempted but could not authenticate (`SEC_E_NO_CREDENTIALS`), so the remote ref may have advanced.
+- `npm.cmd test`: **42 passed, 0 failed, 0 skipped** (34 server tests and 8 client tests). The deterministic finalization tests prove one question read while a competing request receives retryable `409 FINALIZATION_IN_PROGRESS`, stale-lease takeover, and fencing of the superseded scorer.
+- `npm.cmd run build`: passed; server syntax checks and Vite production build passed. `git diff --check`: passed.
+- Finalization claims are acquired atomically before scoring with a 60-second lease. A result can be persisted only by the current unexpired claim token. Expired claims can be reclaimed, and the existing pending-audit recovery plus unique audit index preserves one persisted submission event.
+- **Recovery limitation:** if a process crashes after calculating a score but before persisting it, the expired claim can be retried and the pure scoring calculation may execute again. A worker that continues running beyond its lease may overlap a takeover, but its expired token cannot persist a result. The design guarantees one winning persisted result and audit event; it does not claim exactly-once calculation across arbitrary crashes or pauses.
+- No browser walkthrough, deployed-environment, production HTTPS, accessibility, or load verification was performed.
+
 ## Sprint wrap-up rerun — 25 October 2026
 
 - Commit tested: `e00844256cf35969c80255d6d86bc16d78468dec` on `feature/issue-5-exam-lifecycle`. The tests and build were run after the documentation edits; no application code was changed.
