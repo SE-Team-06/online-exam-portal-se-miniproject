@@ -2,7 +2,7 @@
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
-import { Attempt, AuditLog, Exam, Question, Session, User } from './models/index.js';
+import { Attempt, AuditLog, Exam, Notification, Question, Session, User } from './models/index.js';
 import { authenticate, requireCsrf, requireRole, sendError, writeAudit } from './middleware/auth.js';
 import { verifyPassword } from './security/password.js';
 import { COOKIE_NAME, newOpaqueToken, hashToken, INACTIVITY_MS } from './security/session.js';
@@ -48,6 +48,27 @@ app.post('/api/auth/logout', authenticate, requireCsrf, async (req, res, next) =
   try { await req.sessionRecord.deleteOne(); await writeAudit(req, 'LOGOUT'); res.setHeader('Set-Cookie', `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`); res.status(204).end(); } catch (e) { next(e); }
 });
 app.get('/api/auth/me', authenticate, (req, res) => res.json({ user: asPublicUser(req.user), csrfToken: req.sessionRecord.csrfToken }));
+app.get('/api/notifications', authenticate, async (req, res, next) => {
+  try {
+    const notifications = await Notification.find({ recipientId: req.user._id }).sort({ createdAt: -1 }).limit(50);
+    res.json({ notifications: notifications.map((notification) => ({
+      id: notification.id, type: notification.type, title: notification.title,
+      message: notification.message, readAt: notification.readAt, createdAt: notification.createdAt,
+    })) });
+  } catch (e) { next(e); }
+});
+app.patch('/api/notifications/:notificationId/read', authenticate, requireCsrf, async (req, res, next) => {
+  try {
+    if (!objectId.safeParse(req.params.notificationId).success) return sendError(res, 400, 'INVALID_ID', 'Invalid notification identifier.');
+    const notification = await Notification.findOneAndUpdate(
+      { _id: req.params.notificationId, recipientId: req.user._id },
+      { $set: { readAt: new Date() } },
+      { returnDocument: 'after' },
+    );
+    if (!notification) return sendError(res, 404, 'NOTIFICATION_NOT_FOUND', 'Notification not found.');
+    res.json({ id: notification.id, readAt: notification.readAt });
+  } catch (e) { next(e); }
+});
 
 const questionInput = z.object({ text: z.string().trim().min(1).max(2000), options: z.array(z.object({ id: z.string().min(1).max(50), text: z.string().trim().min(1).max(500) })).min(2).max(6), correctOptionId: z.string().min(1).max(50), marks: z.number().int().min(1).max(100) }).refine((q) => q.options.some((o) => o.id === q.correctOptionId) && new Set(q.options.map((o) => o.id)).size === q.options.length, 'Options must have unique IDs and include exactly one correct option.');
 app.post('/api/questions', authenticate, requireRole('Instructor', 'Administrator'), requireCsrf, async (req, res, next) => {
@@ -107,6 +128,7 @@ app.post('/api/exams', authenticate, requireRole('Instructor', 'Administrator'),
     if (fields.passMark > questions.reduce((s, q) => s + q.marks, 0)) return sendError(res, 400, 'INVALID_PASS_MARK', 'Pass mark cannot exceed the maximum score.');
     const exam = await Exam.create({ ...fields, ownerId: req.user._id, questionIds, assignedStudentIds, status: 'Published' });
     await writeAudit(req, 'EXAM_PUBLISHED', { examId: exam.id });
+    await notifyAssignedStudents(exam);
     res.status(201).json(examView(exam, true));
   } catch (e) { next(e); }
 });
@@ -134,6 +156,7 @@ app.put('/api/exams/:examId', authenticate, requireRole('Instructor', 'Administr
     Object.assign(exam, fields, { questionIds, assignedStudentIds });
     await exam.save();
     await writeAudit(req, 'EXAM_UPDATED', { examId: exam.id });
+    await notifyAssignedStudents(exam);
     res.json(examView(exam, true));
   } catch (e) { next(e); }
 });
@@ -246,6 +269,42 @@ app.get('/api/attempts/mine', authenticate, requireRole('Student'), async (req, 
   } catch (e) {
     next(e);
   }
+});
+app.get('/api/instructor/results', authenticate, requireRole('Instructor', 'Administrator'), async (req, res, next) => {
+  try {
+    const exams = await Exam.find({ ownerId: req.user._id }).select('_id title passMark');
+    const examById = new Map(exams.map((exam) => [String(exam._id), exam]));
+    const attempts = await Attempt.find({ examId: { $in: exams.map((exam) => exam._id) }, status: 'SUBMITTED' })
+      .populate('studentId', 'name email').sort({ submittedAt: -1 });
+    const rows = attempts.map((attempt) => ({
+      attemptId: attempt.id, examId: attempt.examId, examTitle: examById.get(String(attempt.examId))?.title,
+      studentId: attempt.studentId?.id, studentName: attempt.studentId?.name, studentEmail: attempt.studentId?.email,
+      score: attempt.score, maximumScore: attempt.maximumScore, passed: attempt.passed,
+      correctCount: attempt.correctCount, wrongCount: attempt.wrongCount, unansweredCount: attempt.unansweredCount,
+      submittedAt: attempt.submittedAt,
+    }));
+    const total = rows.length;
+    res.json({ results: rows, statistics: {
+      totalAttempts: total,
+      averageScore: total ? rows.reduce((sum, row) => sum + row.score, 0) / total : 0,
+      passRate: total ? rows.filter((row) => row.passed).length / total : 0,
+    } });
+  } catch (e) { next(e); }
+});
+app.get('/api/instructor/results.csv', authenticate, requireRole('Instructor', 'Administrator'), async (req, res, next) => {
+  try {
+    const exams = await Exam.find({ ownerId: req.user._id }).select('_id title');
+    const attempts = await Attempt.find({ examId: { $in: exams.map((exam) => exam._id) }, status: 'SUBMITTED' })
+      .populate('studentId', 'name email').sort({ submittedAt: -1 });
+    const examById = new Map(exams.map((exam) => [String(exam._id), exam.title]));
+    const fields = ['exam', 'student', 'email', 'score', 'maximumScore', 'passed', 'submittedAt'];
+    const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+    const lines = [fields.join(','), ...attempts.map((attempt) => [
+      examById.get(String(attempt.examId)), attempt.studentId?.name, attempt.studentId?.email,
+      attempt.score, attempt.maximumScore, attempt.passed, attempt.submittedAt?.toISOString(),
+    ].map(escape).join(','))];
+    res.type('text/csv').set('Content-Disposition', 'attachment; filename="exam-results.csv"').send(lines.join('\r\n'));
+  } catch (e) { next(e); }
 });
 app.get('/api/attempts/:attemptId', authenticate, requireRole('Student'), async (req, res, next) => {
   try {
@@ -439,7 +498,19 @@ async function finishAttempt(attempt, exam, req = null) {
       const current = await Attempt.findById(claimed._id);
       return current?.status === 'SUBMITTED' ? persistSubmissionAudit(current) : current ?? claimed;
     }
-    return persistSubmissionAudit(submitted);
+    const finalized = await persistSubmissionAudit(submitted);
+    await Notification.updateOne(
+      { recipientId: finalized.studentId, type: 'RESULT_RELEASED', referenceId: finalized._id },
+      { $setOnInsert: {
+        recipientId: finalized.studentId,
+        type: 'RESULT_RELEASED',
+        referenceId: finalized._id,
+        title: 'Exam result released',
+        message: `Your result for "${exam.title}" is now available.`,
+      } },
+      { upsert: true },
+    );
+    return finalized;
   } catch (error) {
     await Attempt.updateOne(
       { _id: claimed._id, status: 'IN_PROGRESS', finalizationClaimToken: claimToken },
@@ -472,6 +543,14 @@ async function persistSubmissionAudit(attempt) {
   )) ?? (await Attempt.findById(attempt._id)) ?? attempt;
 }
 function resultView(attempt, exam) { return { id: attempt.id, status: attempt.status, score: attempt.score, maximumScore: attempt.maximumScore, passed: attempt.passed, correctCount: attempt.correctCount, wrongCount: attempt.wrongCount, unansweredCount: attempt.unansweredCount, submittedAt: attempt.submittedAt, reviewAvailable: Boolean(exam.reviewEnabled && new Date() >= exam.endAt) }; }
+
+async function notifyAssignedStudents(exam) {
+  await Promise.all(exam.assignedStudentIds.map((recipientId) => Notification.updateOne(
+    { recipientId, type: 'EXAM_ASSIGNED', referenceId: exam._id },
+    { $setOnInsert: { recipientId, type: 'EXAM_ASSIGNED', referenceId: exam._id, title: 'New exam assigned', message: `You have been assigned "${exam.title}".` } },
+    { upsert: true },
+  )));
+}
 
 function sameIds(left, right) {
   return left.length === right.length && left.every((id, index) => String(id) === String(right[index]));
