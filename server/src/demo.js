@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import { randomBytes } from 'node:crypto';
 import { MongoMemoryServer } from 'mongodb-memory-server-core';
 import app, { submitExpiredAttempts } from './app.js';
-import { User, Question, Exam } from './models/index.js';
+import { User, Question, Exam, Notification } from './models/index.js';
 import { hashPassword } from './security/password.js';
 
 process.env.MONGOMS_DOWNLOAD_DIR ??= new URL('../../.cache/mongodb-binaries', import.meta.url).pathname.replace(/^\//, '').replaceAll('/', '\\');
@@ -16,7 +16,8 @@ const [instructor, student] = await Promise.all([
 ]);
 const question = await Question.create({ ownerId: instructor._id, text: 'Which HTTP status code indicates a successful response?', options: [{ _id: 'a', text: '200' }, { _id: 'b', text: '404' }, { _id: 'c', text: '500' }], correctOptionId: 'a', marks: 1 });
 const now = new Date();
-await Exam.create({ ownerId: instructor._id, title: 'Demo: HTTP Basics', durationMinutes: 10, startAt: new Date(now.getTime() - 60_000), endAt: new Date(now.getTime() + 30 * 60_000), passMark: 1, questionIds: [question._id], assignedStudentIds: [student._id], status: 'Published' });
+const exam = await Exam.create({ ownerId: instructor._id, title: 'Demo: HTTP Basics', durationMinutes: 10, startAt: new Date(now.getTime() - 60_000), endAt: new Date(now.getTime() + 30 * 60_000), passMark: 1, questionIds: [question._id], assignedStudentIds: [student._id], status: 'Published' });
+await Notification.create({ recipientId: student._id, type: 'EXAM_ASSIGNED', referenceId: exam._id, title: 'New exam assigned', message: `You have been assigned "${exam.title}".` });
 const port = Number(process.env.PORT ?? 4000);
 const server = app.listen(port, () => {
   console.log(`Demo API: http://localhost:${port}`);
