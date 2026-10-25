@@ -56,6 +56,7 @@ function App() {
     endAt: localDateTime(new Date(now.getTime() + 60 * 60_000)), passMark: 1,
     negativeMark: 0, reviewEnabled: false,
   });
+  const [currentTime, setCurrentTime] = useState(Date.now());
   const [selectedQuestionIds, setSelectedQuestionIds] = useState([]);
   const [assignedStudentIds, setAssignedStudentIds] = useState([]);
 
@@ -75,12 +76,19 @@ function App() {
     }
   }, [user]);
   useEffect(() => {
-    if (attempt?.status !== 'IN_PROGRESS') return undefined;
-    const timer = setInterval(() => {
-      if (Date.now() >= new Date(attempt.endsAt).getTime()) submit();
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [attempt]);
+  if (attempt?.status !== 'IN_PROGRESS') return undefined;
+
+  const timer = setInterval(() => {
+    const currentTime = Date.now();
+    setCurrentTime(currentTime);
+
+    if (currentTime >= new Date(attempt.endsAt).getTime()) {
+      submit();
+    }
+  }, 1000);
+
+  return () => clearInterval(timer);
+}, [attempt]);
 
   async function signIn(event) {
     event.preventDefault(); setError('');
@@ -245,7 +253,9 @@ setExams(refreshed.exams);
     finally { setBusy(false); }
   }
 
-  const remaining = attempt?.endsAt ? Math.max(0, Math.ceil((new Date(attempt.endsAt) - Date.now()) / 1000)) : 0;
+  const remaining = attempt?.endsAt
+  ? Math.max(0, Math.ceil((new Date(attempt.endsAt).getTime() - currentTime) / 1000))
+  : 0;
   if (!user) return <main className="sign-in"><section className="login-card"><div className="mark">OE</div><p className="eyebrow">PES UNIVERSITY · SOFTWARE ENGINEERING</p><h1>Online Exam Portal</h1><p className="subtle">Sign in to access your examination workspace.</p><form onSubmit={signIn}><label>Email<input autoComplete="username" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required/></label><label>Password<input autoComplete="current-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required/></label><button className="primary" disabled={busy}>Sign in</button></form>{error && <p className="error" role="alert">{error}</p>}<p className="footnote">This demonstration uses temporary local accounts and data.</p></section></main>;
 
   return <div className="app-shell"><header><a className="brand" href="#home"><span className="brand-mark">OE</span>Exam Portal</a><div className="user-menu"><span className="avatar">{user.name.slice(0, 1)}</span><span>{user.name}<small>{user.role}</small></span><button className="text-button" onClick={signOut}>Sign out</button></div></header><main className="content">
