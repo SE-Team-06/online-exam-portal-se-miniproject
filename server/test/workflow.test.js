@@ -4,7 +4,7 @@ import mongoose from 'mongoose';
 import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server-core';
 import app, { submitExpiredAttempts } from '../src/app.js';
-import { User, Question, Exam, Attempt } from '../src/models/index.js';
+import { User, Question, Exam, Attempt, AuditLog } from '../src/models/index.js';
 import { hashPassword } from '../src/security/password.js';
 
 let mongo; let instructor; let student; let stranger; let otherInstructor; let instructorAgent; let studentAgent; let strangerAgent; let otherInstructorAgent; let csrfInstructor; let csrfStudent; let csrfStranger; let csrfOtherInstructor; let examId; let questionId; let attemptId; let loginAddress = 0;
@@ -217,7 +217,8 @@ describe('SRS-aligned exam workflow', () => {
     await studentAgent.put(`/api/attempts/${attemptId}/answers/${questionId}`).set('x-csrf-token', csrfStudent).send({ selectedOptionId: 'not-an-option' }).expect(400);
     const result = await studentAgent.post(`/api/attempts/${attemptId}/submit`).set('x-csrf-token', csrfStudent).expect(200);
     assert.equal(result.body.attempt.score, 2); assert.equal(result.body.attempt.passed, true);
-    await studentAgent.post(`/api/attempts/${attemptId}/submit`).set('x-csrf-token', csrfStudent).expect(404);
+    const repeated = await studentAgent.post(`/api/attempts/${attemptId}/submit`).set('x-csrf-token', csrfStudent).expect(200);
+    assert.deepEqual(repeated.body.attempt, result.body.attempt);
     await strangerAgent.get(`/api/attempts/${attemptId}/result`).expect(404);
     assert.equal((await Attempt.findById(attemptId)).status, 'SUBMITTED');
   });
@@ -229,13 +230,169 @@ describe('SRS-aligned exam workflow', () => {
     const response = await request(app).get('/api/health').expect(200); assert.equal(response.body.status, 'ok');
     const q = await Question.findById(questionId); assert.equal(q.correctOptionId, undefined);
   });
-  it('automatically submits an expired attempt using the server clock and saved answers', async () => {
+  it('auto-submits an expired attempt with no answers and records its final status and score', async () => {
     const exam = await Exam.create({ ownerId: instructor._id, title: 'Timeout test', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
     const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).expect(201);
     const id = started.body.attempt.id;
-    await Attempt.updateOne({ _id: id }, { $set: { endsAt: new Date(Date.now() - 1000) } });
+    const expiredAt = new Date(Date.now() - 1000);
+    await Attempt.updateOne({ _id: id }, { $set: { endsAt: expiredAt } });
     await submitExpiredAttempts();
     const saved = await Attempt.findById(id);
-    assert.equal(saved.status, 'SUBMITTED'); assert.equal(saved.score, 0); assert.equal(saved.unansweredCount, 1);
+    assert.equal(saved.status, 'SUBMITTED');
+    assert.equal(saved.score, 0);
+    assert.equal(saved.correctCount, 0);
+    assert.equal(saved.wrongCount, 0);
+    assert.equal(saved.unansweredCount, 1);
+    assert.equal(saved.endsAt.getTime(), expiredAt.getTime());
+    assert.ok(saved.submittedAt instanceof Date);
+  });
+  it('returns the finalized result when reading an attempt after its deadline', async () => {
+    const exam = await Exam.create({ ownerId: instructor._id, title: 'Expired attempt read', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
+    const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).expect(201);
+    const id = started.body.attempt.id;
+    const expiredAt = new Date(Date.now() - 1000);
+    await Attempt.updateOne({ _id: id }, { $set: { endsAt: expiredAt } });
+
+    const response = await studentAgent.get(`/api/attempts/${id}`).expect(200);
+
+    assert.equal(response.body.attempt.status, 'SUBMITTED');
+    assert.equal(response.body.attempt.score, 0);
+    assert.equal(response.body.attempt.unansweredCount, 1);
+    assert.equal(response.body.questions, undefined);
+    const saved = await Attempt.findById(id);
+    assert.equal(saved.endsAt.getTime(), expiredAt.getTime());
+  });
+  it('includes answers saved before the deadline when the expiry worker scores the attempt', async () => {
+    const exam = await Exam.create({ ownerId: instructor._id, title: 'Saved answer timeout', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
+    const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).expect(201);
+    const id = started.body.attempt.id;
+    await studentAgent.put(`/api/attempts/${id}/answers/${questionId}`).set('x-csrf-token', csrfStudent)
+      .send({ selectedOptionId: 'a' }).expect(200);
+    const expiredAt = new Date(Date.now() - 1000);
+    await Attempt.updateOne({ _id: id }, { $set: { endsAt: expiredAt } });
+
+    await submitExpiredAttempts();
+
+    const saved = await Attempt.findById(id);
+    assert.equal(saved.status, 'SUBMITTED');
+    assert.equal(saved.score, 2);
+    assert.equal(saved.maximumScore, 2);
+    assert.equal(saved.correctCount, 1);
+    assert.equal(saved.wrongCount, 0);
+    assert.equal(saved.unansweredCount, 0);
+    assert.equal(saved.answers[0].selectedOptionId, 'a');
+    assert.equal(saved.endsAt.getTime(), expiredAt.getTime());
+  });
+  it('returns the existing result when its owner submits after expiry processing', async () => {
+    const exam = await Exam.create({ ownerId: instructor._id, title: 'Idempotent submit', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
+    const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).expect(201);
+    const id = started.body.attempt.id;
+    await studentAgent.put(`/api/attempts/${id}/answers/${questionId}`).set('x-csrf-token', csrfStudent)
+      .send({ selectedOptionId: 'a' }).expect(200);
+    await Attempt.updateOne({ _id: id }, { $set: { endsAt: new Date(Date.now() - 1000) } });
+
+    await submitExpiredAttempts();
+    const persisted = await Attempt.findById(id);
+    const persistedResult = {
+      id: persisted.id,
+      status: persisted.status,
+      score: persisted.score,
+      maximumScore: persisted.maximumScore,
+      passed: persisted.passed,
+      correctCount: persisted.correctCount,
+      wrongCount: persisted.wrongCount,
+      unansweredCount: persisted.unansweredCount,
+      submittedAt: persisted.submittedAt.toISOString(),
+    };
+    assert.equal(await AuditLog.countDocuments({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id }), 1);
+
+    const response = await studentAgent.post(`/api/attempts/${id}/submit`)
+      .set('x-csrf-token', csrfStudent).expect(200);
+    assert.deepEqual({
+      id: response.body.attempt.id,
+      status: response.body.attempt.status,
+      score: response.body.attempt.score,
+      maximumScore: response.body.attempt.maximumScore,
+      passed: response.body.attempt.passed,
+      correctCount: response.body.attempt.correctCount,
+      wrongCount: response.body.attempt.wrongCount,
+      unansweredCount: response.body.attempt.unansweredCount,
+      submittedAt: response.body.attempt.submittedAt,
+    }, persistedResult);
+    assert.equal(await AuditLog.countDocuments({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id }), 1);
+    await strangerAgent.post(`/api/attempts/${id}/submit`).set('x-csrf-token', csrfStranger).expect(404);
+    await strangerAgent.get(`/api/attempts/${id}/result`).expect(404);
+    const missingId = new mongoose.Types.ObjectId();
+    await studentAgent.post(`/api/attempts/${missingId}/submit`).set('x-csrf-token', csrfStudent)
+      .expect(404).expect(({ body }) => assert.equal(body.error.code, 'ATTEMPT_NOT_FOUND'));
+  });
+  it('finalizes an expired attempt before rejecting a late answer change', async () => {
+    const exam = await Exam.create({ ownerId: instructor._id, title: 'Late answer timeout', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
+    const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).expect(201);
+    const id = started.body.attempt.id;
+    await studentAgent.put(`/api/attempts/${id}/answers/${questionId}`).set('x-csrf-token', csrfStudent)
+      .send({ selectedOptionId: 'a' }).expect(200);
+    const expiredAt = new Date(Date.now() - 1000);
+    await Attempt.updateOne({ _id: id }, { $set: { endsAt: expiredAt } });
+
+    await studentAgent.put(`/api/attempts/${id}/answers/${questionId}`).set('x-csrf-token', csrfStudent)
+      .send({ selectedOptionId: 'b' }).expect(409)
+      .expect(({ body }) => assert.equal(body.error.code, 'ATTEMPT_ENDED'));
+
+    const saved = await Attempt.findById(id);
+    assert.equal(saved.status, 'SUBMITTED');
+    assert.equal(saved.score, 2);
+    assert.equal(saved.answers[0].selectedOptionId, 'a');
+    assert.equal(saved.endsAt.getTime(), expiredAt.getTime());
+  });
+  it('finalizes once when manual submission overlaps expiry processing', async () => {
+    const exam = await Exam.create({ ownerId: instructor._id, title: 'Concurrent timeout', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
+    const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).expect(201);
+    const id = started.body.attempt.id;
+    await studentAgent.put(`/api/attempts/${id}/answers/${questionId}`).set('x-csrf-token', csrfStudent)
+      .send({ selectedOptionId: 'a' }).expect(200);
+    await Attempt.updateOne({ _id: id }, { $set: { endsAt: new Date(Date.now() - 1000) } });
+
+    const originalFind = Question.find;
+    let scoringReads = 0;
+    let releaseScoring;
+    const bothScoringReads = new Promise((resolve) => { releaseScoring = resolve; });
+    Question.find = function (...args) {
+      const query = originalFind.apply(this, args);
+      const questionIds = args[0]?._id?.$in;
+      if (!questionIds?.some((candidate) => String(candidate) === String(questionId))) return query;
+
+      const originalExec = query.exec.bind(query);
+      query.exec = async (...execArgs) => {
+        const questions = await originalExec(...execArgs);
+        scoringReads += 1;
+        if (scoringReads === 2) releaseScoring();
+        await bothScoringReads;
+        return questions;
+      };
+      return query;
+    };
+
+    try {
+      const [manualResponse] = await Promise.all([
+        studentAgent.post(`/api/attempts/${id}/submit`).set('x-csrf-token', csrfStudent).expect(200),
+        submitExpiredAttempts(),
+      ]);
+      const saved = await Attempt.findById(id);
+      const submissionLogs = await AuditLog.countDocuments({
+        action: 'ATTEMPT_SUBMITTED',
+        'details.attemptId': id,
+      });
+      assert.equal(scoringReads, 2);
+      assert.equal(manualResponse.body.attempt.status, 'SUBMITTED');
+      assert.equal(manualResponse.body.attempt.score, 2);
+      assert.equal(saved.status, 'SUBMITTED');
+      assert.equal(saved.score, 2);
+      assert.equal(saved.correctCount, 1);
+      assert.equal(saved.answers[0].selectedOptionId, 'a');
+      assert.equal(submissionLogs, 1);
+    } finally {
+      Question.find = originalFind;
+    }
   });
 });

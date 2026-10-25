@@ -1,5 +1,13 @@
 # Local test execution record
 
+## Sprint wrap-up rerun — 25 October 2026
+
+- Commit tested: `e00844256cf35969c80255d6d86bc16d78468dec` on `feature/issue-5-exam-lifecycle`. The tests and build were run after the documentation edits; no application code was changed.
+- `npm.cmd test`: **32 passed, 0 failed, 0 skipped** (24 server tests: 21 workflow and 3 scoring; 8 client tests).
+- `npm.cmd run build`: passed; server `node --check` checks passed and Vite production build completed (16 modules; JS 238.42 kB / 73.68 kB gzip; CSS 7.28 kB / 2.23 kB gzip).
+- These checks verify automated tests and build only. No product browser walkthrough was performed. Authenticated GitHub browser inspection later verified PR #34 merged, its merge commit, one passing PR check, and the issue-index snapshot; this was not a full Actions-history review. Live Jira status remains unverified.
+- The local `origin/main` cache remains `f2ed5186eda44197104a30ae44cf2e6e3fd2e2e9`; it is stale relative to the browser-verified GitHub merge of PR #34 at `58b988be87a174127c9201a5e3696281a1bcb553`. A fetch attempted during the 25 October audit failed with `SEC_E_NO_CREDENTIALS`, so do not infer current ancestry from the cached ref.
+
 ## Issue #5 focused configuration checks — 24 October 2026 (latest rerun)
 
 - Branch: `feature/issue-5-exam-lifecycle`, based on local `5da5127bb9857e306aa893ff5314884c7537eb11` (parent `62b817f0151ab68e63a66055ae3ccdfcc2a0d6a9`). The worktree contains uncommitted changes; no push or PR was made. The initial fetch attempt failed with `SEC_E_NO_CREDENTIALS` at that time; the later successful fetch is recorded below.
