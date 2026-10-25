@@ -1,43 +1,54 @@
-# Online Exam Portal — presentation checklist
+# Online Exam Portal — sprint review checklist
 
-**Prepared:** 13 October 2026
+**Updated:** 25 October 2026
+**Repository:** [SE-Team-06/online-exam-portal-se-miniproject](https://github.com/SE-Team-06/online-exam-portal-se-miniproject)
+**Evidence scope:** local automated checks and authenticated GitHub browser readback. No fresh product browser walkthrough or video recording was made in this audit.
 
-**Repository branch:** `feature/mvp-exam-workflow`
+## Current evidence
 
-**Presentation status:** Dependency installation, automated tests, and production build now pass. Rehearse the live instructor/student demo before promising the complete UI workflow.
+- PR #34, `feat: implement exam configuration and locking`, is merged to `main` at `58b988be87a174127c9201a5e3696281a1bcb553`. GitHub showed one passing check. The local `origin/main` cache is older (`f2ed518`) because fetch failed with `SEC_E_NO_CREDENTIALS`; use GitHub for current merge state until a successful fetch.
+- `npm.cmd test`: 32 passed, 0 failed, 0 skipped. `npm.cmd run build`: server syntax checks and Vite production build passed. See [`test-execution.md`](test-execution.md). These are automated checks; they do not establish full SRS compliance or UI acceptance.
+- GitHub Issues page showed 16 open and 8 closed (24 total). Key closed issues include #2, #4, #5, #7, #11 and #26. Issues #15 (shuffling) and #17 (timer/recovery) are also closed, but their visible acceptance criteria have gaps against current source/tests; review those closures with the team.
+- The organization-owned [SE-Team-06 Project](https://github.com/orgs/SE-Team-06/projects/1) loads. Its Prioritized backlog view had a saved Sprint 1 filter and showed zero matching items; do not interpret that as backlog completion. The personal Project remains a backup.
+- The official Part 2 PDF was not available in the repository during this audit. Dates and two-minute/one-minute recording requirements below are sourced from existing handover/checklist records and need confirmation against the submitted PDF if exact assignment wording is required.
 
-## Before presenting
+## Sprint 1 closeout
 
-- [x] Dependency install, automated tests, and production build completed on 13 October. On this Windows system use `npm.cmd` because PowerShell blocks `npm.ps1`; no execution-policy change is needed. Results are in [test-execution.md](test-execution.md).
-- [ ] Start `npm.cmd run demo` and check that `http://localhost:5173` opens and the API health check at `http://localhost:4000/api/health` returns `{"status":"ok"}`.
-- [ ] Use only the freshly generated disposable demo credentials shown in that local terminal. Never put the password in slides, chat, screenshots, or committed files.
-- [ ] If possible, rehearse the instructor and student flow using dummy data. Report only actions you personally observed; this audit did not freshly verify either browser workflow today.
-- [ ] Open Jira [OEPSE](https://chhavis0823.atlassian.net/jira/software/projects/OEPSE/summary) and the [backlog](https://chhavis0823.atlassian.net/jira/software/projects/OEPSE/boards/70/backlog). The project has 29 issues; both proposed sprints are future and every issue remains To Do/unassigned.
-- [ ] Open the private [GitHub Project](https://github.com/users/chhavi2308-s/projects/1/views/1). The main view showed zero matching items on 13 October. Explain that Jira is the authoritative backlog; do not imply the GitHub board contains Jira stories.
-- [ ] Confirm screen sharing works and avoid showing local credential output or secret files.
+The historical planned Sprint 1 set was nine Jira work items / 33 provisional points, corresponding to GitHub issues #2, #4, #5, #6, #7, #8, #9/#10 (OEPSE-17 counted once), #11 and #26. The live GitHub state now shows #2, #4, #5, #7, #11 and #26 closed; #6, #8, #9 and #10 remain open. Local tests and merged PRs provide implementation evidence, but closure state alone is not browser acceptance.
 
-## Suggested presentation sequence
+- [ ] Confirm current Jira sprint membership, points, and status; prior Jira readback is dated 13 October.
+- [ ] Rehearse instructor creation/configuration, publication/assignment, student start/save/submit, and result viewing with disposable demo data.
+- [ ] Review #6, #8, #9 and #10 against the live issue descriptions and close only when their own scope is demonstrated. Keep the OEPSE-17 five-point estimate counted once across #9/#10; keep OEPSE-18 deadline-triggered submission separate.
+- [ ] Confirm the required Sprint 1 one-minute recording exists outside this checkout; the repository search found no video file. If absent, record the real product and upload it to the repository.
+- [ ] Verify the actual Actions run and required teammate PR/reviewer evidence from GitHub; PR #34 showed one check passed, but this audit did not inspect the full Actions history or review identities.
 
-1. **Purpose (15–20 seconds):** Explain that the system supports online MCQ exams and evaluation for the course project.
-2. **Technology and scope (15–20 seconds):** React/Vite client, Node/Express API, MongoDB/Mongoose, npm workspaces. Describe this as an MVP slice, not full SRS compliance.
-3. **Working product (60–90 seconds, only after fresh rehearsal):** Show the login screen, instructor subject/exam list, then log out and show student assigned exam, answer/save, submission, and result only if those exact actions work in the rehearsal. Use disposable generated accounts and demo data.
-4. **Quality evidence (20–30 seconds):** State the latest actual-checkout results precisely: 12/12 automated tests passed (9 workflow integration and 3 scoring); server syntax checks and Vite production build passed (15 modules). The earlier dependency-lock error was resolved by running `npm.cmd ci`.
-5. **Project management (20–30 seconds):** Show the 29-item Jira backlog and future sprint dates. Show the GitHub Project's configured board and clearly say it is empty.
-6. **Limitations and next work (20–30 seconds):** Mention incomplete instructor authoring, account-management, analytics/export/notifications, accessibility/performance/reliability evidence, and the three Must requirements outside the proposed sprints: FR-OE-024, NFR-OE-004, NFR-OE-009.
-7. **Close:** State the next team decisions: rehearse both demo roles, agree assignments/capacity, and decide how to handle the three Must backlog items.
+## Sprint 2 preparation
 
-## Verified facts to use
+The existing issue bodies describe an eight-story, 45-provisional-point Sprint 2 proposal for 26–30 October 2026. Jira was not refreshed, so treat membership, dates, points and capacity as unconfirmed until read back in Jira. Proposed scope and dependencies:
 
-- Local branch: `feature/mvp-exam-workflow`, based on the original `origin/main` history; local-only commits are not on GitHub yet.
-- Latest current-checkout test/build results and the earlier dependency-lock error are recorded separately in [test-execution.md](test-execution.md).
-- Live Jira readback: 5 epics, 23 stories, 1 task (29 total); Sprint 1 has 9 issues / 33 provisional points; Sprint 2 has 8 / 45; backlog has 12 / 30; totals are provisional, and all items are unassigned.
-- GitHub Project is private and configured, but empty in the verified main view. Jira remains the detailed backlog.
-- The feature table and evidence are in [TEAM_HANDOVER.md](TEAM_HANDOVER.md) and [implementation-gap-register.md](implementation-gap-register.md). The project is not fully SRS-compliant.
+| Issue | Jira mapping in issue body | Work / dependency to confirm |
+|---|---|---|
+| #1 | OEPSE-7, 5 points | Registration, verification, reset; requires email delivery and secure token-expiry tests. |
+| #3 | OEPSE-8, 3 points; body also mentions OEPSE-23 | Admin account lifecycle. Separate the OEPSE-23 audit scope into #21 to avoid duplicate acceptance/points. |
+| #17 | OEPSE-16, 8 points; marked closed | Timer and answer recovery. Closed issue body still says planned work; compare refresh/retry criteria to code, then have the team decide whether to reopen/carry over. |
+| #18 | OEPSE-18, 3 points | Deadline auto-submit. Depends on attempts/saved answers; add saved-answer expiry and concurrent manual-submit coverage. |
+| #20 | OEPSE-24, 8 points | Auth/transport security. Server auth tests exist; deployment/TLS evidence remains. |
+| #21 | OEPSE-23, 5 points | Audit event coverage, filtering, IP, retention, redaction; overlaps OEPSE-23 text in #3. |
+| #22 | OEPSE-25, 8 points | Repeatable load and storage measurements; no target results are claimed. |
+| #25 | OEPSE-28, 5 points | Coverage reporting and Linux/container setup time; coverage and 60-minute setup target are unmeasured. |
 
-## Known limitations / honest wording
+These eight mappings sum to the historical 45 points only if OEPSE-23 is counted once and the closed #17 work is included as a planned item. Do not treat them as current Jira status or assigned work. Confirm carryover, estimates, ownership, capacity and dates with the team before committing.
 
-- An earlier dependency install failed with Windows `EPERM` unlinking the native Rolldown binary. A later `npm.cmd ci` completed successfully; no native binary was manually deleted and no execution policy was changed.
-- The last live app smoke check was earlier on 13 October and checked only the app page and health endpoint. Chhavi previously reported instructor login and a subject display. A fresh student browser demonstration is not verified by this audit.
-- A fresh live demo was not started after the latest dependency installation. Test/build success does not verify the browser demonstration path.
-- Full registration, account recovery/administration, complete instructor authoring, analytics, export, notification, audit UI, and several quality requirements remain incomplete or unverified. See the traceability evidence before answering requirement-compliance questions.
-- No demo video file was found in this repository. The assignment requires a one-minute Sprint 1 video and a two-minute Sprint 2 video. Record both from the actual working product and upload them to the repository yourself; neither exists here as a verified recording.
+### Sprint 2 demo and freeze
+
+- [ ] Before work: confirm story owners, acceptance criteria, dependencies and environment; do not infer owners from GitHub issue creators.
+- [ ] During sprint: link focused PRs to existing issues; run tests/build and review CI evidence for each merged slice.
+- [ ] Two-minute demo outline: instructor publishes/assigns an exam; student starts and saves answers; demonstrate only verified recovery/expiry behavior; submit and show the student-owned result; state limitations honestly.
+- [ ] Record the real two-minute Sprint 2 demo only after its shown functions pass in the running app; upload it to the repository.
+- [ ] Freeze development only after the final tests, documentation, required demo upload and review evidence are complete.
+
+## Manual GitHub issue reconciliation
+
+Read each live issue description, linked PR and timeline before editing. Use the issue page's **Close issue** control only after the scope is merged and acceptance is demonstrated; add a short comment citing the PR and evidence. To revisit an incorrectly closed item, use **Reopen issue** after team agreement. Do not create a duplicate issue for Jira work that already maps to an open or closed card.
+
+Suggested review sequence: #6, #8, #9, #10 for Sprint 1; then validate #15 and #17 closed-state discrepancies; clarify the #3/#21 overlap; then plan the remaining Sprint 2 issues in Jira. The current open list and evidence notes are in [`TEAM_HANDOVER.md`](TEAM_HANDOVER.md).

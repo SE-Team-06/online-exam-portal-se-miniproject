@@ -1,6 +1,6 @@
 # Implementation and requirement gap register
 
-Assessment date: 24 October 2026. Source of requirement IDs: submitted SRS v1.2 and `SRS/ID_Cheat_Sheet.md`. This register describes the local MVP slice only. A partial implementation is not acceptance of the complete SRS requirement.
+Assessment date: 25 October 2026. Source of requirement IDs: submitted SRS v1.2 and `SRS/ID_Cheat_Sheet.md`. GitHub status is browser-verified; local `origin/main` could not be refreshed. This register describes the MVP slice only. A partial implementation is not acceptance of the complete SRS requirement.
 
 ## Evidence reviewed
 
@@ -21,7 +21,7 @@ Assessment date: 24 October 2026. Source of requirement IDs: submitted SRS v1.2 
 | SEC-OE-008 | Request validation, CSRF token and origin checks are present; tests cover malformed question and missing CSRF | Full OWASP coverage, sanitization and systematic injection/XSS testing remain |
 | SEC-OE-009 | Attempt and result access are scoped to the authenticated student; tests cover unassigned start and cross-user result denial | Full boundary/grace-period matrix and concurrent edge cases remain |
 | SEC-OE-010 | Login limiter configured for 10 requests per IP per 60 seconds | Automated 429/window/IP behavior test is still needed; password-reset route does not exist |
-| FR-OE-007, FR-OE-008, FR-OE-011 | Fetched `origin/main` at `f2ed5186eda44197104a30ae44cf2e6e3fd2e2e9` contains instructor question/exam create and configure UI, ownership checks, and validation. Issue #4 question edit/delete commit `5da5127bb9857e306aa893ff5314884c7537eb11` is an ancestor of that ref. The focused uncommitted `feature/issue-5-exam-lifecycle` diff adds owner-scoped exam editing, validates question ownership and student assignment references, and locks schedule, assignments, questions, duration, scoring, and review settings after an attempt starts. | The supplied Issue #5 description covers creating and locking exam configuration; no other criteria are inferred. The live GitHub page and browser acceptance remain unverified. Exam deletion is not required by the repository SRS. Draft/publish work is preserved separately and excluded from this Issue #5 diff. |
+| FR-OE-007, FR-OE-008, FR-OE-011 | PR #32 (question management) and PR #34 (exam configuration/locking) are visible as merged in authenticated GitHub. PR #34 merge commit is `58b988be87a174127c9201a5e3696281a1bcb553`, containing source commit `e00844256cf35969c80255d6d86bc16d78468dec`. Local automated tests cover ownership, validation, assignment and post-attempt locks. | No browser acceptance walkthrough. `git fetch` failed, so local `origin/main` remains stale at `f2ed5186eda44197104a30ae44cf2e6e3fd2e2e9`; live GitHub main was verified in browser. Exam deletion and a separate draft/publish lifecycle are not implemented. Issue #4/#5 are closed on GitHub, but closure is not browser acceptance. |
 | FR-OE-013, FR-OE-014 | Assigned exam list and one-attempt start constraints; integration test | All status/time-window cases and UI usability are not fully tested |
 | FR-OE-015, FR-OE-017, FR-OE-018 | Answer/flag persistence, server-side save and resume path in API | Autosave timing/30-second interval and interrupted-browser behavior need verification |
 | FR-OE-016, NFR-OE-010 | Server derives attempt end time and expiry worker auto-submits expired attempts | Displayed timer drift (≤2 seconds), clock skew and browser lifecycle remain unverified |
@@ -36,9 +36,9 @@ Assessment date: 24 October 2026. Source of requirement IDs: submitted SRS v1.2 
 - FR-OE-001, FR-OE-002: registration and email verification.
 - FR-OE-005: one-time password reset flow.
 - FR-OE-006: administrator user lifecycle and role management.
-- FR-OE-009: question/option shuffling.
-- FR-OE-010 (OEPSE-13 / Issue #16): optional negative marking is represented in the exam schema and validated API configuration; the instructor form exposes it, workflow tests verify configuration persistence, and scoring unit tests cover deduction and the zero floor. Full Issue #16 acceptance and end-to-end configuration-to-score behavior remain unverified; no additional negative-marking work is included in the Issue #5 changes.
-- FR-OE-012: freeze schedule, assignments, question selection, duration, scoring, and review settings after first attempt is covered by local code and automated tests; broader browser acceptance is unverified.
+- FR-OE-009 / OEPSE-12 / GitHub #15: question/option shuffling is not implemented. The model has a `shuffleQuestions` field, but no UI/API behavior consumes it, no option-shuffle setting exists, and tests do not verify randomized ordering or scoring. GitHub issue #15 is closed despite its acceptance criteria requiring these behaviors; team should review/reopen it rather than treating closure as evidence.
+- FR-OE-010 (OEPSE-13 / Issue #16): negative marking is represented in the exam schema and validated API; the instructor form exposes a non-negative value; scoring tests cover positive deduction, zero floor and unanswered answers; an integration test checks persistence. Issue #16 is still open. Full acceptance is incomplete/unverified: there is no explicit enable/disable control beyond setting the value to zero; exams are created directly as Published, so the pre-publication and fixed-after-publication lifecycle criteria are not demonstrated; no end-to-end test connects configuration through scoring for enabled and disabled cases.
+- FR-OE-012: PR #34 merges freezing schedule, assignments, question selection, duration, scoring, and review settings after an attempt starts; tests cover changes rejected after the first attempt. Broader browser acceptance is unverified.
 - FR-OE-024: instructor attempt analytics and summary statistics.
 - FR-OE-025: CSV results export.
 - FR-OE-026: assignment/result notifications.
@@ -57,15 +57,22 @@ Assessment date: 24 October 2026. Source of requirement IDs: submitted SRS v1.2 
 - Temporary demo data and generated passwords are disposable. Do not use real identities or credentials.
 
 
-## Follow-up validation evidence — 24 October 2026
+## Live issue and merge reconciliation — 25 October 2026
 
-- PR #30 merged the optional-answer selection fix into `main`; PR #31 merged exam validation at `62b817f0151ab68e63a66055ae3ccdfcc2a0d6a9`.
-- Question edit/delete endpoints and UI are in commit `5da5127bb9857e306aa893ff5314884c7537eb11`, which is an ancestor of fetched `origin/main` `f2ed5186eda44197104a30ae44cf2e6e3fd2e2e9`. Server tests cover owner authorization, invalid IDs and payloads, non-owner denial, malformed JSON, and blocking edits/deletes for questions referenced by exams. The earlier `npm.cmd test` run passed 28/28; server syntax, Vite build with `--configLoader native`, and `git diff --check` passed. Authenticated browser testing has not been performed.
+- GitHub browser readback showed PR #34 merged to `main` at `58b988be87a174127c9201a5e3696281a1bcb553`; source commit `e008442` is included. PR #34 showed 1/1 check passing. The current issue index showed 16 open and 8 closed. Local `git fetch` failed with `SEC_E_NO_CREDENTIALS`; cached `origin/main` is stale and must not be presented as the live main head.
+- Open issues observed: #1, #3, #6, #8, #9, #10, #12, #16, and #18–#25. Closed issues observed: #2, #4, #5, #7, #11, #15, #17, #26. The list is a live snapshot, not an assertion of current Jira state.
+- Closed #15 is inconsistent with source: shuffle acceptance is not implemented. Closed #17's issue body asks for restoration after refresh/interruption, a server-derived deadline, per-student restoration, and tests for refresh/retry/duplicate saves/expiry. APIs can return an existing in-progress attempt and an authenticated student can fetch their own attempt, but the UI restoration route and those regression cases are not covered by the test suite. The issue should be re-audited with the assignee/team; do not assume its closed status proves acceptance.
+- Issue #3's description includes administrator audit acceptance while explicitly separating that area from account lifecycle; open #21 separately covers OEPSE-23 audit review. Clarify #3's scope to prevent duplicate acceptance/point counting. #9 and #10 both refer to OEPSE-17 and their bodies say count the 5-point Jira item once; preserve that reconciliation.
+- Issue #6 is open although current code creates/publishes exams and assigns verified students; workflow tests cover publication and assignment. It is a candidate for manual closure after a short browser check against its actual description. Issues #8–#10 also have relevant implementation/tests, but acceptance details and any remaining UI/manual expectations must be checked before closure.
+
+## Follow-up validation evidence — 25 October 2026 (historical local tests)
+
+- PRs #30–#34 are shown merged in GitHub's current main history. Question edit/delete commit `5da5127bb9857e306aa893ff5314884c7537eb11` and exam configuration/locking commit `e008442` are present in the browser-verified history. Local tests are recorded in `test-execution.md`; authenticated GitHub issue states and PR #34 were inspected in browser, but no product browser walkthrough was performed.
 - The official Part 2 PDF was not found in the repository, and the provided local PDF path was unavailable in this session. No new Part 2 completion claim is made from that document.
 
-## Issue #5 implementation work — 24 October 2026
+## Issue #5 implementation work — 25 October 2026
 
-- At the start of this work, fetching failed with `SEC_E_NO_CREDENTIALS`; that was the status at the time. A later authenticated fetch succeeded and updated `origin/main` to `f2ed5186eda44197104a30ae44cf2e6e3fd2e2e9`. Commit `5da5127bb9857e306aa893ff5314884c7537eb11` is an ancestor of that fetched ref. The live Issue #5 criteria remain unverified.
-- The focused local Issue #5 changes retain exam creation/configuration, owner-scoped editing, question-ownership and student-assignment validation, and locking of schedule, assignments, question selection, duration, scoring, and review settings after an attempt begins. Tests cover owner boundaries, edits and lock behavior, duplicate assignments, foreign questions, and schedule boundaries. Draft/publish lifecycle and its tests are preserved in the pre-split recovery patch, not in this focused diff.
+- The 25 October fetch attempt failed with `SEC_E_NO_CREDENTIALS`; a browser-authenticated GitHub inspection later verified PR #34 merged and Issue #5 closed. The Issue #5 body says the scope is creating and locking exam configuration, with question authoring and negative marking separate.
+- Commit `e00844256cf35969c80255d6d86bc16d78468dec` contains exam creation/configuration, owner-scoped editing, question/student reference validation, and locks sensitive settings after attempts start. PR #34 merged it as `58b988be87a174127c9201a5e3696281a1bcb553`. Local automated tests passed; browser product acceptance remains unverified. Draft/publish recovery work is not in this commit.
 - Exam deletion was not implemented: the repository SRS does not require deletion, and deleting exams with attempts would need a separate retention/product decision. The live issue description must be checked before deciding closure.
-- Browser walkthrough and latest remote Actions status are unverified. Changes remain uncommitted and unpublished.
+- Browser product walkthrough is unverified. PR #34 showed one passing check; no separate current Actions details were retrieved.
