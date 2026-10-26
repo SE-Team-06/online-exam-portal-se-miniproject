@@ -16,4 +16,17 @@ describe('score calculation', () => {
     const result = calculateScore(questions, [{ questionId: '1', selectedOptionId: null }], 0, 1);
     assert.deepEqual([result.score, result.unansweredCount], [0, 2]);
   });
+  it('applies no deduction when negative marking is disabled', () => {
+    const result = calculateScore(questions, [{ questionId: '1', selectedOptionId: 'a' }, { questionId: '2', selectedOptionId: 'x' }], 0, 1);
+    assert.deepEqual([result.score, result.correctCount, result.wrongCount], [2, 1, 1]);
+  });
+  it('never penalises unanswered questions when negative marking is enabled', () => {
+    const result = calculateScore(questions, [{ questionId: '1', selectedOptionId: 'a' }], 1, 1);
+    assert.deepEqual([result.score, result.wrongCount, result.unansweredCount], [2, 0, 1]);
+  });
+  it('keeps full marks for correct answers and deducts only per wrong answer', () => {
+    const three = [...questions, { _id: '3', correctOptionId: 'c', marks: 4 }];
+    const result = calculateScore(three, [{ questionId: '1', selectedOptionId: 'a' }, { questionId: '2', selectedOptionId: 'x' }, { questionId: '3', selectedOptionId: 'c' }], 0.5, 1);
+    assert.deepEqual([result.score, result.maximumScore, result.correctCount, result.wrongCount], [5.5, 9, 2, 1]);
+  });
 });
