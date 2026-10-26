@@ -626,3 +626,39 @@ describe('negative marking (FR-OE-010)', () => {
     assert.equal((await Exam.findById(exam.body.id)).negativeMark, 0.25);
   });
 });
+
+describe('exam page: server time, flags and focus-loss reporting (FR-OE-015, FR-OE-021, FR-OE-024, NFR-OE-010)', () => {
+  it('returns server time, keeps flags across resume and reports focus losses to the instructor', async () => {
+    const exam = await instructorAgent.post('/api/exams').set('x-csrf-token', csrfInstructor).send(examPayload({ title: '=Focus report' })).expect(201);
+    const before = Date.now();
+    const started = await studentAgent.post(`/api/exams/${exam.body.id}/attempts`).set('x-csrf-token', csrfStudent).expect(201);
+    const attempt = started.body.attempt.id;
+    assert.ok(Math.abs(new Date(started.body.serverTime).getTime() - before) < 5_000);
+
+    const saved = await studentAgent.put(`/api/attempts/${attempt}/answers/${questionId}`).set('x-csrf-token', csrfStudent).send({ selectedOptionId: null, flagged: true }).expect(200);
+    assert.ok(saved.body.serverTime);
+    const resumed = await studentAgent.post(`/api/exams/${exam.body.id}/attempts`).set('x-csrf-token', csrfStudent).expect(200);
+    assert.equal(resumed.body.attempt.answers.find((answer) => String(answer.questionId) === questionId).flagged, true);
+    assert.ok(resumed.body.serverTime);
+
+    await studentAgent.post(`/api/attempts/${attempt}/focus-loss`).set('x-csrf-token', csrfStudent).expect(204);
+    await studentAgent.post(`/api/attempts/${attempt}/focus-loss`).set('x-csrf-token', csrfStudent).expect(204);
+    await studentAgent.put(`/api/attempts/${attempt}/answers/${questionId}`).set('x-csrf-token', csrfStudent).send({ selectedOptionId: 'a', flagged: false }).expect(200);
+    await studentAgent.post(`/api/attempts/${attempt}/submit`).set('x-csrf-token', csrfStudent).expect(200);
+
+    const report = await instructorAgent.get('/api/instructor/results').expect(200);
+    const row = report.body.results.find((item) => item.attemptId === attempt);
+    assert.equal(row.focusLossCount, 2);
+    assert.equal(row.focusLossTimes.length, 2);
+    const stats = report.body.examStatistics.find((item) => item.examId === exam.body.id);
+    assert.deepEqual([stats.totalAttempts, stats.highestScore, stats.lowestScore, stats.averageScore, stats.passRate], [1, 2, 2, 2, 1]);
+    for (const key of ['highestScore', 'lowestScore']) assert.ok(key in report.body.statistics);
+
+    const csv = await instructorAgent.get('/api/instructor/results.csv').expect(200);
+    const [header, ...lines] = csv.text.split('\r\n');
+    assert.match(header, /focusLossCount$/);
+    const line = lines.find((item) => item.includes('Focus report'));
+    assert.ok(line.startsWith(`"'=Focus report"`), 'formula-like cells are neutralised');
+    assert.ok(line.endsWith('"2"'));
+  });
+});

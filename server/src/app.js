@@ -237,13 +237,13 @@ app.post('/api/exams/:examId/attempts', authenticate, requireRole('Student'), re
     let attempt;
     const existing = await Attempt.findOne({ examId: exam._id, studentId: req.user._id });
     if (existing?.status === 'IN_PROGRESS' && existing.endsAt > now) {
-      return res.json({ attempt: { id: existing.id, examId: exam.id, endsAt: existing.endsAt, status: existing.status, answers: existing.answers }, questions: await safeQuestions(exam.questionIds) });
+      return res.json({ attempt: { id: existing.id, examId: exam.id, endsAt: existing.endsAt, status: existing.status, answers: existing.answers }, questions: await safeQuestions(exam.questionIds), serverTime: new Date() });
     }
     if (existing) return sendError(res, 409, 'ATTEMPT_EXISTS', 'An attempt already exists for this exam.');
     try { attempt = await Attempt.create({ examId: exam._id, studentId: req.user._id, startedAt: now, endsAt, answers: exam.questionIds.map((questionId) => ({ questionId })) }); }
     catch (e) { if (e.code === 11000) return sendError(res, 409, 'ATTEMPT_EXISTS', 'An attempt already exists for this exam.'); throw e; }
     await writeAudit(req, 'ATTEMPT_STARTED', { examId: exam.id, attemptId: attempt.id });
-    return res.status(201).json({ attempt: { id: attempt.id, examId: exam.id, endsAt: attempt.endsAt, status: attempt.status, answers: attempt.answers }, questions: await safeQuestions(exam.questionIds) });
+    return res.status(201).json({ attempt: { id: attempt.id, examId: exam.id, endsAt: attempt.endsAt, status: attempt.status, answers: attempt.answers }, questions: await safeQuestions(exam.questionIds), serverTime: new Date() });
   } catch (e) { next(e); }
 });
 app.get('/api/attempts/mine', authenticate, requireRole('Student'), async (req, res, next) => {
@@ -284,13 +284,21 @@ app.get('/api/instructor/results', authenticate, requireRole('Instructor', 'Admi
       score: attempt.score, maximumScore: attempt.maximumScore, passed: attempt.passed,
       correctCount: attempt.correctCount, wrongCount: attempt.wrongCount, unansweredCount: attempt.unansweredCount,
       submittedAt: attempt.submittedAt,
+      focusLossCount: attempt.focusEvents.length, focusLossTimes: attempt.focusEvents,
     }));
-    const total = rows.length;
-    res.json({ results: rows, statistics: {
-      totalAttempts: total,
-      averageScore: total ? rows.reduce((sum, row) => sum + row.score, 0) / total : 0,
-      passRate: total ? rows.filter((row) => row.passed).length / total : 0,
-    } });
+    const summarize = (subset) => {
+      const scores = subset.map((row) => row.score);
+      return {
+        totalAttempts: subset.length,
+        averageScore: subset.length ? scores.reduce((sum, score) => sum + score, 0) / subset.length : 0,
+        highestScore: subset.length ? Math.max(...scores) : 0,
+        lowestScore: subset.length ? Math.min(...scores) : 0,
+        passRate: subset.length ? subset.filter((row) => row.passed).length / subset.length : 0,
+      };
+    };
+    res.json({ results: rows, statistics: summarize(rows), examStatistics: exams.map((exam) => ({
+      examId: exam.id, examTitle: exam.title, ...summarize(rows.filter((row) => String(row.examId) === exam.id)),
+    })) });
   } catch (e) { next(e); }
 });
 app.get('/api/instructor/results.csv', authenticate, requireRole('Instructor', 'Administrator'), async (req, res, next) => {
@@ -299,11 +307,11 @@ app.get('/api/instructor/results.csv', authenticate, requireRole('Instructor', '
     const attempts = await Attempt.find({ examId: { $in: exams.map((exam) => exam._id) }, status: 'SUBMITTED' })
       .populate('studentId', 'name email').sort({ submittedAt: -1 });
     const examById = new Map(exams.map((exam) => [String(exam._id), exam.title]));
-    const fields = ['exam', 'student', 'email', 'score', 'maximumScore', 'passed', 'submittedAt'];
-    const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+    const fields = ['exam', 'student', 'email', 'score', 'maximumScore', 'passed', 'submittedAt', 'focusLossCount'];
+    const escape = (value) => { const text = String(value ?? ''); return `"${(/^[=+\-@]/.test(text) ? `'${text}` : text).replaceAll('"', '""')}"`; };
     const lines = [fields.join(','), ...attempts.map((attempt) => [
       examById.get(String(attempt.examId)), attempt.studentId?.name, attempt.studentId?.email,
-      attempt.score, attempt.maximumScore, attempt.passed, attempt.submittedAt?.toISOString(),
+      attempt.score, attempt.maximumScore, attempt.passed, attempt.submittedAt?.toISOString(), attempt.focusEvents.length,
     ].map(escape).join(','))];
     res.type('text/csv').set('Content-Disposition', 'attachment; filename="exam-results.csv"').send(lines.join('\r\n'));
   } catch (e) { next(e); }
@@ -318,7 +326,7 @@ app.get('/api/attempts/:attemptId', authenticate, requireRole('Student'), async 
       if (attempt.status !== 'SUBMITTED') return finalizationRetry(res);
     }
     if (attempt.status === 'SUBMITTED') return res.json({ attempt: resultView(attempt, exam) });
-    res.json({ attempt: { id: attempt.id, status: attempt.status, endsAt: attempt.endsAt, answers: attempt.answers }, questions: await safeQuestions(exam.questionIds) });
+    res.json({ attempt: { id: attempt.id, status: attempt.status, endsAt: attempt.endsAt, answers: attempt.answers }, questions: await safeQuestions(exam.questionIds), serverTime: new Date() });
   } catch (e) { next(e); }
 });
 app.put('/api/attempts/:attemptId/answers/:questionId', authenticate, requireRole('Student'), requireCsrf, async (req, res, next) => {
@@ -356,7 +364,7 @@ app.put('/api/attempts/:attemptId/answers/:questionId', authenticate, requireRol
       }
       return sendError(res, 409, 'ATTEMPT_ENDED', 'The attempt has ended.');
     }
-    res.json({ saved: true });
+    res.json({ saved: true, serverTime: new Date() });
   } catch (e) { next(e); }
 });
 app.post('/api/attempts/:attemptId/focus-loss', authenticate, requireRole('Student'), requireCsrf, async (req, res, next) => {
