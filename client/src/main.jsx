@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { reconcileCorrectOptionId, validateQuestionDraft } from './question-form.js';
 import { describeNegativeMarking, negativeMarkPayload, validateNegativeMark } from './exam-form.js';
+import { clockOffset, formatRemaining, remainingSeconds, submissionSummary } from './exam-session.js';
 import './style.css';
 
 async function api(path, { method = 'GET', body, csrf } = {}) {
@@ -40,6 +41,10 @@ function App() {
   const [attempt, setAttempt] = useState(null);
   const [attemptQuestions, setAttemptQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
+  const [flags, setFlags] = useState({});
+  const [clockOffsetMs, setClockOffsetMs] = useState(0);
+  const [confirmingSubmit, setConfirmingSubmit] = useState(false);
+  const [instructorResults, setInstructorResults] = useState(null);
   const [result, setResult] = useState(null);
   const [review, setReview] = useState(null);
   const [previousResults, setPreviousResults] = useState([]);
@@ -76,8 +81,8 @@ function App() {
     } else {
       setPreviousResults([]);
       setNotifications([]);
-      Promise.all([api('/questions'), api('/students')])
-        .then(([questionData, studentData]) => { setQuestions(questionData.questions); setStudents(studentData.students); })
+      Promise.all([api('/questions'), api('/students'), api('/instructor/results')])
+        .then(([questionData, studentData, resultData]) => { setQuestions(questionData.questions); setStudents(studentData.students); setInstructorResults(resultData); })
         .catch((e) => setError(e.message));
     }
   }, [user]);
@@ -88,13 +93,39 @@ function App() {
     const currentTime = Date.now();
     setCurrentTime(currentTime);
 
-    if (currentTime >= new Date(attempt.endsAt).getTime()) {
+    if (remainingSeconds(attempt.endsAt, currentTime, clockOffsetMs) === 0) {
+      setConfirmingSubmit(false);
       submit();
     }
   }, 1000);
 
   return () => clearInterval(timer);
-}, [attempt]);
+}, [attempt, clockOffsetMs]);
+  useEffect(() => {
+    if (attempt?.status !== 'IN_PROGRESS') return undefined;
+    let away = false;
+    const leave = () => {
+      if (away) return;
+      away = true;
+      api(`/attempts/${attempt.id}/focus-loss`, { method: 'POST', csrf }).catch(() => {});
+    };
+    const back = () => { if (document.visibilityState === 'visible' && document.hasFocus()) away = false; };
+    const onVisibility = () => (document.visibilityState === 'hidden' ? leave() : back());
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('blur', leave);
+    window.addEventListener('focus', back);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('blur', leave);
+      window.removeEventListener('focus', back);
+    };
+  }, [attempt?.id, attempt?.status, csrf]);
+  useEffect(() => {
+    if (!confirmingSubmit) return undefined;
+    const onKey = (event) => { if (event.key === 'Escape') setConfirmingSubmit(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [confirmingSubmit]);
 
   async function signIn(event) {
     event.preventDefault(); setError('');
@@ -111,6 +142,8 @@ function App() {
     setQuestions([]);
     setStudents([]);
     setPreviousResults([]);
+    setInstructorResults(null);
+    setFlags({});
   } catch (e) {
     setError(e.message);
   }
@@ -120,7 +153,10 @@ function App() {
     try {
       const data = await api(`/exams/${exam.id}/attempts`, { method: 'POST', csrf });
       setAttempt(data.attempt); setAttemptQuestions(data.questions);
+      setClockOffsetMs(clockOffset(data.serverTime));
+      setCurrentTime(Date.now());
       setAnswers(Object.fromEntries(data.questions.map((q) => [q.id, data.attempt.answers?.find((answer) => answer.questionId === q.id)?.selectedOptionId ?? null])));
+      setFlags(Object.fromEntries(data.questions.map((q) => [q.id, Boolean(data.attempt.answers?.find((answer) => answer.questionId === q.id)?.flagged)])));
       setResult(null);
 setReview(null);
 
@@ -131,12 +167,23 @@ setExams(refreshed.exams);
   }
   async function save(questionId, selectedOptionId) {
     setAnswers((current) => ({ ...current, [questionId]: selectedOptionId }));
-    try { await api(`/attempts/${attempt.id}/answers/${questionId}`, { method: 'PUT', csrf, body: { selectedOptionId } }); }
-    catch (e) { setError(e.message); }
+    try {
+      const data = await api(`/attempts/${attempt.id}/answers/${questionId}`, { method: 'PUT', csrf, body: { selectedOptionId, flagged: Boolean(flags[questionId]) } });
+      if (data?.serverTime) setClockOffsetMs(clockOffset(data.serverTime));
+    } catch (e) { setError(e.message); }
+  }
+  async function toggleFlag(questionId) {
+    const flagged = !flags[questionId];
+    setFlags((current) => ({ ...current, [questionId]: flagged }));
+    try {
+      const data = await api(`/attempts/${attempt.id}/answers/${questionId}`, { method: 'PUT', csrf, body: { selectedOptionId: answers[questionId] ?? null, flagged } });
+      if (data?.serverTime) setClockOffsetMs(clockOffset(data.serverTime));
+    } catch (e) { setFlags((current) => ({ ...current, [questionId]: !flagged })); setError(e.message); }
   }
   async function submit() {
     if (!attempt || attempt.status !== 'IN_PROGRESS' || busy) return;
 
+    setConfirmingSubmit(false);
     setBusy(true);
 
     try {
@@ -268,15 +315,14 @@ setExams(refreshed.exams);
     finally { setBusy(false); }
   }
 
-  const remaining = attempt?.endsAt
-  ? Math.max(0, Math.ceil((new Date(attempt.endsAt).getTime() - currentTime) / 1000))
-  : 0;
+  const remaining = attempt?.endsAt ? remainingSeconds(attempt.endsAt, currentTime, clockOffsetMs) : 0;
+  const summary = submissionSummary(attemptQuestions, answers, flags);
   if (!user) return <main className="sign-in"><section className="login-card"><div className="mark">OE</div><p className="eyebrow">PES UNIVERSITY · SOFTWARE ENGINEERING</p><h1>Online Exam Portal</h1><p className="subtle">Sign in to access your examination workspace.</p><form onSubmit={signIn}><label>Email<input autoComplete="username" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required/></label><label>Password<input autoComplete="current-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required/></label><button className="primary" disabled={busy}>Sign in</button></form>{error && <p className="error" role="alert">{error}</p>}<p className="footnote">This demonstration uses temporary local accounts and data.</p></section></main>;
 
   return <div className="app-shell"><header><a className="brand" href="#home"><span className="brand-mark">OE</span>Exam Portal</a><div className="user-menu"><span className="avatar">{user.name.slice(0, 1)}</span><span>{user.name}<small>{user.role}</small></span><button className="text-button" onClick={signOut}>Sign out</button></div></header><main className="content">
     <section className="welcome"><p className="eyebrow">{user.role.toUpperCase()} WORKSPACE</p><h1>{attempt?.status === 'IN_PROGRESS' ? 'Your exam is in progress' : result ? 'Exam submitted' : review ? 'Answer review' : `Welcome, ${user.name.split(' ')[0]}`}</h1><p className="subtle">{attempt?.status === 'IN_PROGRESS' ? 'Your answers save as you work. Submit when you are ready.' : 'Your examinations and recent results appear here.'}</p></section>
     {error && <p className="error notice" role="alert">{error}</p>}{notice && <p className="success notice" role="status">{notice}</p>}
-    {attempt?.status === 'IN_PROGRESS' ? <section className="exam-panel"><div className="exam-top"><div><p className="eyebrow">TIMED EXAM</p><h2>{exams.find((exam) => exam.id === attempt.examId)?.title ?? 'Examination'}</h2></div><div className="timer"><span>TIME REMAINING</span><strong>{String(Math.floor(remaining / 60)).padStart(2, '0')}:{String(remaining % 60).padStart(2, '0')}</strong></div></div>{attemptQuestions.map((question, index) => <article className="question" key={question.id}><p className="question-count">QUESTION {index + 1} <span>{question.marks} point{question.marks === 1 ? '' : 's'}</span></p><h3>{question.text}</h3><div className="options">{question.options.map((option) => <label className={`option ${answers[question.id] === option.id ? 'selected' : ''}`} key={option.id}><input type="radio" name={question.id} checked={answers[question.id] === option.id} onChange={() => save(question.id, option.id)}/><span>{option.text}</span></label>)}</div></article>)}<button className="primary submit" onClick={submit} disabled={busy}>Submit exam</button></section>
+    {attempt?.status === 'IN_PROGRESS' ? <section className="exam-panel"><div className="exam-top"><div><p className="eyebrow">TIMED EXAM</p><h2>{exams.find((exam) => exam.id === attempt.examId)?.title ?? 'Examination'}</h2></div><div className={`timer ${remaining <= 60 ? 'timer-critical' : remaining <= 300 ? 'timer-warning' : ''}`} role="timer" aria-label="Time remaining"><span>TIME REMAINING</span><strong>{formatRemaining(remaining)}</strong></div></div><p className="focus-notice">Leaving this tab or window is recorded and shown to your instructor.</p><p className="sr-only" aria-live="polite">{remaining === 300 ? 'Five minutes remaining.' : remaining === 60 ? 'One minute remaining.' : ''}</p>{attemptQuestions.map((question, index) => <article className={`question ${flags[question.id] ? 'flagged' : ''}`} key={question.id}><p className="question-count">QUESTION {index + 1} <span>{question.marks} point{question.marks === 1 ? '' : 's'}</span><button type="button" className={`flag-button ${flags[question.id] ? 'active' : ''}`} aria-pressed={Boolean(flags[question.id])} onClick={() => toggleFlag(question.id)}>{flags[question.id] ? '⚑ Flagged for review' : '⚐ Flag for review'}</button></p><h3>{question.text}</h3><div className="options" role="radiogroup" aria-label={`Question ${index + 1} options`}>{question.options.map((option) => <label className={`option ${answers[question.id] === option.id ? 'selected' : ''}`} key={option.id}><input type="radio" name={question.id} checked={answers[question.id] === option.id} onChange={() => save(question.id, option.id)}/><span>{option.text}</span></label>)}</div></article>)}<button className="primary submit" onClick={() => setConfirmingSubmit(true)} disabled={busy}>Submit exam</button>{confirmingSubmit && <div className="modal-backdrop" onClick={() => setConfirmingSubmit(false)}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="submit-title" onClick={(event) => event.stopPropagation()}><h2 id="submit-title">Submit your exam?</h2><p>{summary.unanswered ? `You have ${summary.unanswered} unanswered question${summary.unanswered === 1 ? '' : 's'}` : 'You have answered every question'}{summary.flagged ? ` and ${summary.flagged} flagged for review` : ''}.</p><p className="subtle">You cannot change your answers after submitting.</p><div className="modal-actions"><button className="text-button" type="button" autoFocus onClick={() => setConfirmingSubmit(false)}>Go back</button><button className="primary" type="button" onClick={submit} disabled={busy}>Submit exam</button></div></div></div>}</section>
       : result ? <section className="result-card"><p className="eyebrow">RESULT</p><h2>{result.passed ? 'Passed' : 'Not passed'}</h2><p className="score">{result.score} <span>/ {result.maximumScore}</span></p><p>{result.correctCount} correct · {result.wrongCount} incorrect · {result.unansweredCount} unanswered</p><button className="text-button" onClick={() => { setResult(null); setReview(null); }}>Back to dashboard</button></section>
       : review ? <section className="exam-panel"><p className="eyebrow">ANSWER REVIEW</p><h2>Review your answers</h2>{review.map((item, index) => <article className="question" key={item.questionId}><p className="question-count">QUESTION {index + 1}</p><h3>{item.text}</h3><p>Your answer: {item.options.find((option) => option.id === item.selectedOptionId)?.text ?? 'Not answered'}</p><p>Correct answer: {item.options.find((option) => option.id === item.correctOptionId)?.text ?? 'Unavailable'}</p></article>)}<button className="text-button" onClick={() => setReview(null)}>Back to dashboard</button></section>
       : user.role === 'Student' ? <><section className="exam-list"><div className="section-heading"><div><p className="eyebrow">UPDATES</p><h2>Notifications</h2></div><span className="count">{notifications.filter((item) => !item.readAt).length} unread</span></div>{notifications.length ? notifications.map((notification) => <article className={`notification-card ${notification.readAt ? '' : 'unread'}`} key={notification.id} onClick={() => markNotificationRead(notification)}><div className="notification-icon">{notification.type === 'RESULT_RELEASED' ? '✓' : '!'}</div><div className="exam-info"><h3>{notification.title}</h3><p>{notification.message}</p><small>{new Date(notification.createdAt).toLocaleString()}</small></div>{!notification.readAt && <span className="notification-dot" aria-label="Unread notification" />}</article>) : <p className="empty">No notifications yet.</p>}</section><section className="exam-list"><div className="section-heading"><div><p className="eyebrow">COMPLETED WORK</p><h2>Previous results</h2></div><span className="count">{previousResults.length}</span></div>{previousResults.length ? previousResults.map((item) => <article className="exam-card" key={item.id}><div className="exam-info"><h3>{item.examTitle}</h3><p>Submitted {item.submittedAt ? new Date(item.submittedAt).toLocaleString() : ''}</p><p>Score: {item.score} / {item.maximumScore} · {item.passed ? 'Passed' : 'Not passed'}</p></div><button className="primary compact" onClick={() => viewResult(item.id)} disabled={busy}>View result</button>{item.reviewAvailable && <button className="text-button" onClick={() => viewReview(item.id)} disabled={busy}>View review</button>}</article>) : <p className="empty">No submitted results yet.</p>}</section><section className="exam-list"><div className="section-heading"><div><p className="eyebrow">YOUR WORK</p><h2>Assigned exams</h2></div><span className="count">{exams.length} exam{exams.length === 1 ? '' : 's'}</span></div>{exams.length ? exams.map((exam) => <article className="exam-card" key={exam.id}><div className="exam-icon">✦</div><div className="exam-info"><h3>{exam.title}</h3><p>{exam.durationMinutes} minutes · Opens {new Date(exam.startAt).toLocaleString()}</p></div>
@@ -298,7 +344,7 @@ setExams(refreshed.exams);
   )}
 </div>
 </article>) : <p className="empty">No exams are assigned to your account yet.</p>}</section></>
-      : <><section className="exam-list"><p className="eyebrow">INSTRUCTOR VIEW</p><h2>Your exams</h2>{exams.length ? exams.map((exam) => <article className="exam-card" key={exam.id}><div className="exam-icon">✦</div><div className="exam-info"><h3>{exam.title}</h3><p>{exam.durationMinutes} minutes · {exam.status} · {describeNegativeMarking(exam.negativeMark)}</p></div><div className="question-actions"><button className="text-button" type="button" onClick={() => editExam(exam)} disabled={busy}>Edit</button></div></article>) : <p className="empty">No exams created yet.</p>}</section>
+      : <><section className="exam-list"><p className="eyebrow">INSTRUCTOR VIEW</p><h2>Your exams</h2>{exams.length ? exams.map((exam) => <article className="exam-card" key={exam.id}><div className="exam-icon">✦</div><div className="exam-info"><h3>{exam.title}</h3><p>{exam.durationMinutes} minutes · {exam.status} · {describeNegativeMarking(exam.negativeMark)}</p></div><div className="question-actions"><button className="text-button" type="button" onClick={() => editExam(exam)} disabled={busy}>Edit</button></div></article>) : <p className="empty">No exams created yet.</p>}</section><section className="exam-list"><div className="section-heading"><div><p className="eyebrow">RESULTS</p><h2>Attempts and statistics</h2></div>{instructorResults?.results.length ? <a className="text-button" href="/api/instructor/results.csv" download>Download CSV</a> : null}</div>{instructorResults?.examStatistics?.filter((stat) => stat.totalAttempts).length ? <div className="stat-grid">{instructorResults.examStatistics.filter((stat) => stat.totalAttempts).map((stat) => <article className="stat-card" key={stat.examId}><h3>{stat.examTitle}</h3><p>{stat.totalAttempts} attempt{stat.totalAttempts === 1 ? '' : 's'} · {Math.round(stat.passRate * 100)}% passed</p><p>Average {stat.averageScore.toFixed(1)} · Highest {stat.highestScore} · Lowest {stat.lowestScore}</p></article>)}</div> : null}{instructorResults?.results.length ? <div className="table-wrap"><table className="results-table"><thead><tr><th scope="col">Student</th><th scope="col">Exam</th><th scope="col">Score</th><th scope="col">Result</th><th scope="col">Tab switches</th><th scope="col">Submitted</th></tr></thead><tbody>{instructorResults.results.map((row) => <tr key={row.attemptId}><td>{row.studentName}<small>{row.studentEmail}</small></td><td>{row.examTitle}</td><td>{row.score} / {row.maximumScore}</td><td>{row.passed ? 'Passed' : 'Not passed'}</td><td title={row.focusLossTimes?.map((time) => new Date(time).toLocaleTimeString()).join(', ')}>{row.focusLossCount ? <span className="focus-count">{row.focusLossCount}</span> : 0}</td><td>{row.submittedAt ? new Date(row.submittedAt).toLocaleString() : ''}</td></tr>)}</tbody></table></div> : <p className="empty">No submitted attempts yet.</p>}</section>
         <section className="management-grid"><section className="management-card"><p className="eyebrow">QUESTION BANK</p><h2>{editingQuestionId ? 'Edit multiple-choice question' : 'Add a multiple-choice question'}</h2><form className="management-form" onSubmit={createQuestion}><label>Question<input value={questionText} onChange={(event) => setQuestionText(event.target.value)} maxLength={2000} required/></label>{optionTexts.map((value, index) => <label key={index}>Option {index + 1}<input value={value} onChange={(event) => updateOptionText(index, event.target.value)} maxLength={500} required={index < 2}/></label>)}<label>Correct answer<select value={correctOptionId} onChange={(event) => setCorrectOptionId(event.target.value)}>{optionTexts.map((text, index) => text.trim() && <option key={optionIds[index]} value={optionIds[index]}>Option {index + 1}: {text}</option>)}</select></label><label>Marks<input type="number" min="1" max="100" value={questionMarks} onChange={(event) => setQuestionMarks(event.target.value)} required/></label><button className="primary" disabled={busy}>{editingQuestionId ? 'Save changes' : 'Save question'}</button>{editingQuestionId && <button className="text-button" type="button" onClick={resetQuestionForm} disabled={busy}>Cancel edit</button>}</form><h3 className="subheading">Your questions ({questions.length})</h3>{questions.length ? <ul className="management-list">{questions.map((question) => <li key={question.id}><strong>{question.text}</strong><small>{question.options.length} options · {question.marks} mark{question.marks === 1 ? '' : 's'}</small><div className="question-actions"><button className="text-button" type="button" onClick={() => editQuestion(question)} disabled={busy}>Edit</button><button className="text-button" type="button" onClick={() => deleteQuestion(question)} disabled={busy}>Delete</button></div></li>)}</ul> : <p className="empty">Add questions before configuring an exam.</p>}</section>
           <section className="management-card"><p className="eyebrow">EXAM SETUP</p><h2>{editingExamId ? 'Edit exam configuration' : 'Configure and publish an exam'}</h2><form className="management-form" onSubmit={saveExam}><label>Exam title<input value={examDraft.title} onChange={(event) => setExamDraft((current) => ({ ...current, title: event.target.value }))} maxLength={160} required/></label><label>Duration (minutes)<input type="number" min="1" max="600" value={examDraft.durationMinutes} onChange={(event) => setExamDraft((current) => ({ ...current, durationMinutes: event.target.value }))} required/></label><label>Opens<input type="datetime-local" value={examDraft.startAt} onChange={(event) => setExamDraft((current) => ({ ...current, startAt: event.target.value }))} required/></label><label>Closes<input type="datetime-local" value={examDraft.endAt} onChange={(event) => setExamDraft((current) => ({ ...current, endAt: event.target.value }))} required/></label><label>Pass mark<input type="number" min="0" step="0.5" value={examDraft.passMark} onChange={(event) => setExamDraft((current) => ({ ...current, passMark: event.target.value }))} required/></label><label className="check-label"><input type="checkbox" checked={examDraft.negativeMarkEnabled} onChange={(event) => setExamDraft((current) => ({ ...current, negativeMarkEnabled: event.target.checked }))}/> Apply negative marking to wrong answers</label>{examDraft.negativeMarkEnabled && <label>Marks deducted per wrong answer<input type="number" min="0.25" max="100" step="0.25" value={examDraft.negativeMark} onChange={(event) => setExamDraft((current) => ({ ...current, negativeMark: event.target.value }))} required/><small>Unanswered questions are never penalised; the total score cannot go below 0.</small></label>}<label className="check-label"><input type="checkbox" checked={examDraft.reviewEnabled} onChange={(event) => setExamDraft((current) => ({ ...current, reviewEnabled: event.target.checked }))}/> Allow answer review after exam closes</label><fieldset><legend>Questions</legend>{questions.map((question) => <label className="check-label" key={question.id}><input type="checkbox" checked={selectedQuestionIds.includes(question.id)} onChange={(event) => setSelectedQuestionIds((current) => event.target.checked ? [...current, question.id] : current.filter((id) => id !== question.id))}/>{question.text} ({question.marks} marks)</label>)}{!questions.length && <small>Create questions first.</small>}</fieldset><fieldset><legend>Assign students</legend>{students.map((student) => <label className="check-label" key={student.id}><input type="checkbox" checked={assignedStudentIds.includes(student.id)} onChange={(event) => setAssignedStudentIds((current) => event.target.checked ? [...current, student.id] : current.filter((id) => id !== student.id))}/>{student.name} · {student.email}</label>)}{!students.length && <small>No verified active student accounts are available.</small>}</fieldset><div className="question-actions">{editingExamId && <button className="text-button" type="button" onClick={resetExamForm} disabled={busy}>Cancel</button>}<button className="primary" type="submit" disabled={busy || !questions.length || !selectedQuestionIds.length}>{editingExamId ? 'Save changes' : 'Configure and publish'}</button></div></form></section></section></>}
     <footer><span>Online Exam Portal</span><span>Software Engineering Mini-Project</span></footer></main></div>;
