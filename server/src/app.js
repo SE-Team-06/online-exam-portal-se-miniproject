@@ -1,4 +1,5 @@
 ﻿import express from 'express';
+import mongoose from 'mongoose';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
@@ -21,7 +22,11 @@ const bad = (res, issues) => sendError(res, 400, 'VALIDATION_ERROR', issues[0]?.
 const asPublicUser = (user) => ({ id: user.id, name: user.name, email: user.email, role: user.role });
 const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid identifier.');
 
-app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+app.get('/api/health', async (_req, res) => {
+  let database = 'down';
+  try { if (mongoose.connection.readyState === 1) { await mongoose.connection.db.admin().ping(); database = 'up'; } } catch { database = 'down'; }
+  res.status(database === 'up' ? 200 : 503).json({ status: database === 'up' ? 'ok' : 'degraded', database, time: new Date() });
+});
 app.post('/api/auth/login', loginLimit, async (req, res, next) => {
   try {
     const parsed = z.object({ email: z.string().email().max(254), password: z.string().min(1).max(128) }).safeParse(req.body);
@@ -454,6 +459,28 @@ app.get('/api/attempts/:attemptId/review', authenticate, requireRole('Student'),
   } catch (e) {
     next(e);
   }
+});
+
+// NFR-OE-014: an Administrator can delete the data of a deactivated account on request.
+// Audit records are kept (SEC-OE-011 requires 12-month retention); they hold only the user ID.
+app.delete('/api/admin/users/:userId/data', authenticate, requireRole('Administrator'), requireCsrf, async (req, res, next) => {
+  try {
+    if (!objectId.safeParse(req.params.userId).success) return sendError(res, 400, 'INVALID_ID', 'Invalid user identifier.');
+    const user = await User.findById(req.params.userId);
+    if (!user) return sendError(res, 404, 'USER_NOT_FOUND', 'User not found.');
+    if (user.active) return sendError(res, 409, 'USER_ACTIVE', 'Deactivate the account before deleting its data.');
+    if (await Exam.exists({ ownerId: user._id }) || await Question.exists({ ownerId: user._id })) {
+      return sendError(res, 409, 'USER_OWNS_CONTENT', 'Reassign or remove this account\'s questions and exams first.');
+    }
+    const [attempts, notifications, sessions] = await Promise.all([
+      Attempt.deleteMany({ studentId: user._id }), Notification.deleteMany({ recipientId: user._id }), Session.deleteMany({ userId: user._id }),
+    ]);
+    await Exam.updateMany({ assignedStudentIds: user._id }, { $pull: { assignedStudentIds: user._id } });
+    await user.deleteOne();
+    const deleted = { attempts: attempts.deletedCount, notifications: notifications.deletedCount, sessions: sessions.deletedCount, user: 1 };
+    await writeAudit(req, 'USER_DATA_DELETED', { deletedUserId: req.params.userId, ...deleted });
+    res.json({ deleted });
+  } catch (e) { next(e); }
 });
 
 app.use((_req, res) => sendError(res, 404, 'NOT_FOUND', 'The requested resource was not found.'));
