@@ -5,12 +5,14 @@ import { z } from 'zod';
 import { Attempt, AuditLog, Exam, Notification, Question, Session, User } from './models/index.js';
 import { authenticate, requireCsrf, requireRole, sendError, writeAudit } from './middleware/auth.js';
 import { verifyPassword } from './security/password.js';
-import { COOKIE_NAME, newOpaqueToken, hashToken, INACTIVITY_MS } from './security/session.js';
+import { newOpaqueToken, hashToken, INACTIVITY_MS, sessionCookie } from './security/session.js';
+import { httpsRequired, requireHttps } from './security/transport.js';
 import { calculateScore } from './domain/scoring.js';
 
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
+app.use(requireHttps);
 app.use(helmet());
 app.use(express.json({ limit: '32kb' }));
 const loginLimit = rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
@@ -39,13 +41,13 @@ app.post('/api/auth/login', loginLimit, async (req, res, next) => {
     user.failedLogins = 0; user.lockedUntil = null; await user.save();
     const token = newOpaqueToken(); const csrfToken = newOpaqueToken();
     await Session.create({ tokenHash: hashToken(token), csrfToken, userId: user._id, lastActivity: now, expiresAt: new Date(now.getTime() + INACTIVITY_MS) });
-    res.setHeader('Set-Cookie', `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${INACTIVITY_MS / 1000}${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
+    res.setHeader('Set-Cookie', sessionCookie(token, { secure: httpsRequired() }));
     await AuditLog.create({ action: 'LOGIN_SUCCESS', userId: user._id, ip: req.ip });
     res.json({ user: asPublicUser(user), csrfToken });
   } catch (error) { next(error); }
 });
 app.post('/api/auth/logout', authenticate, requireCsrf, async (req, res, next) => {
-  try { await req.sessionRecord.deleteOne(); await writeAudit(req, 'LOGOUT'); res.setHeader('Set-Cookie', `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`); res.status(204).end(); } catch (e) { next(e); }
+  try { await req.sessionRecord.deleteOne(); await writeAudit(req, 'LOGOUT'); res.setHeader('Set-Cookie', sessionCookie('', { clear: true, secure: httpsRequired() })); res.status(204).end(); } catch (e) { next(e); }
 });
 app.get('/api/auth/me', authenticate, (req, res) => res.json({ user: asPublicUser(req.user), csrfToken: req.sessionRecord.csrfToken }));
 app.get('/api/notifications', authenticate, async (req, res, next) => {
