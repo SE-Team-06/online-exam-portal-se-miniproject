@@ -14,6 +14,7 @@ const DUMMY_ID = '0123456789abcdef01234567';
 const ANY = ['Student', 'Instructor', 'Administrator'];
 const STAFF = ['Instructor', 'Administrator'];
 const STUDENT = ['Student'];
+const ADMIN = ['Administrator'];
 
 // Every protected API route with the roles allowed to call it. The coverage test below fails
 // when a route is added to app.js without being listed here.
@@ -39,6 +40,7 @@ const PROTECTED_ROUTES = [
   ['post', `/api/attempts/${DUMMY_ID}/submit`, STUDENT],
   ['get', `/api/attempts/${DUMMY_ID}/result`, ANY],
   ['get', `/api/attempts/${DUMMY_ID}/review`, STUDENT],
+  ['delete', `/api/admin/users/${DUMMY_ID}/data`, ADMIN],
 ];
 const PUBLIC_ROUTES = ['GET /api/health', 'POST /api/auth/login', 'POST /api/auth/logout'];
 
