@@ -113,7 +113,8 @@ app.get('/api/students', authenticate, requireRole('Instructor', 'Administrator'
     res.json({ students: students.map((student) => ({ id: student.id, name: student.name, email: student.email })) });
   } catch (e) { next(e); }
 });
-const examInput = z.object({ title: z.string().trim().min(1).max(160), durationMinutes: z.number().int().min(1).max(600), startAt: z.string().datetime(), endAt: z.string().datetime(), passMark: z.number().min(0), negativeMark: z.number().min(0).max(100).default(0), questionIds: z.array(objectId).min(1), assignedStudentIds: z.array(objectId).default([]), reviewEnabled: z.boolean().default(false) })
+const examInput = z.object({ title: z.string().trim().min(1).max(160), durationMinutes: z.number().int().min(1).max(600), startAt: z.string().datetime(), endAt: z.string().datetime(), passMark: z.number().min(0), negativeMark: z.number().min(0).max(100).default(0), questionIds: z.array(objectId).min(1), assignedStudentIds: z.array(objectId).default([]),shuffleQuestions: z.boolean().default(false),
+shuffleOptions: z.boolean().default(false), reviewEnabled: z.boolean().default(false),})
   .refine((e) => new Date(e.endAt) > new Date(e.startAt), 'Exam end must be after start.')
   .refine((e) => new Set(e.questionIds).size === e.questionIds.length, 'Exam questions must be unique.')
   .refine((e) => new Set(e.assignedStudentIds).size === e.assignedStudentIds.length, 'Student assignments must be unique.');
@@ -144,7 +145,18 @@ app.put('/api/exams/:examId', authenticate, requireRole('Instructor', 'Administr
     const students = assignedStudentIds.length ? await User.find({ _id: { $in: assignedStudentIds }, role: 'Student', active: true, emailVerified: true }) : [];
     if (students.length !== assignedStudentIds.length) return sendError(res, 400, 'INVALID_STUDENTS', 'Assignments must refer to active, verified student accounts.');
     if (fields.passMark > questions.reduce((s, q) => s + q.marks, 0)) return sendError(res, 400, 'INVALID_PASS_MARK', 'Pass mark cannot exceed the maximum score.');
-    const hasAttempts = await Attempt.exists({ examId: exam._id });
+    if (
+  fields.shuffleQuestions !== exam.shuffleQuestions ||
+  fields.shuffleOptions !== exam.shuffleOptions
+) {
+  return sendError(
+    res,
+    409,
+    'EXAM_SETTINGS_LOCKED',
+    'Question and option shuffle settings cannot be changed after publication.'
+  );
+}
+const hasAttempts = await Attempt.exists({ examId: exam._id });
     const scheduleChanged = new Date(fields.startAt).getTime() !== exam.startAt.getTime()
       || new Date(fields.endAt).getTime() !== exam.endAt.getTime();
     const assignmentsChanged = !sameIdSet(assignedStudentIds, exam.assignedStudentIds);
@@ -232,18 +244,80 @@ app.post('/api/exams/:examId/attempts', authenticate, requireRole('Student'), re
     if (!exam) return sendError(res, 404, 'EXAM_NOT_FOUND', 'Exam is unavailable.');
     const now = new Date(); if (now < exam.startAt || now >= exam.endAt) return sendError(res, 409, 'EXAM_CLOSED', 'The exam is not currently open.');
     const endsAt = new Date(Math.min(now.getTime() + exam.durationMinutes * 60_000, exam.endAt.getTime()));
-    let attempt;
-    const existing = await Attempt.findOne({ examId: exam._id, studentId: req.user._id });
-    if (existing?.status === 'IN_PROGRESS' && existing.endsAt > now) {
-      return res.json({ attempt: { id: existing.id, examId: exam.id, endsAt: existing.endsAt, status: existing.status, answers: existing.answers }, questions: await safeQuestions(exam.questionIds) });
-    }
-    if (existing) return sendError(res, 409, 'ATTEMPT_EXISTS', 'An attempt already exists for this exam.');
-    try { attempt = await Attempt.create({ examId: exam._id, studentId: req.user._id, startedAt: now, endsAt, answers: exam.questionIds.map((questionId) => ({ questionId })) }); }
-    catch (e) { if (e.code === 11000) return sendError(res, 409, 'ATTEMPT_EXISTS', 'An attempt already exists for this exam.'); throw e; }
-    await writeAudit(req, 'ATTEMPT_STARTED', { examId: exam.id, attemptId: attempt.id });
-    return res.status(201).json({ attempt: { id: attempt.id, examId: exam.id, endsAt: attempt.endsAt, status: attempt.status, answers: attempt.answers }, questions: await safeQuestions(exam.questionIds) });
-  } catch (e) { next(e); }
+   
+let attempt;
+const existing = await Attempt.findOne({ examId: exam._id, studentId: req.user._id });
+
+if (existing?.status === 'IN_PROGRESS' && existing.endsAt > now) {
+  const questionOrder = existing.questionOrder?.length
+    ? existing.questionOrder
+    : exam.questionIds;
+
+  return res.json({
+    attempt: {
+      id: existing.id,
+      examId: exam.id,
+      endsAt: existing.endsAt,
+      status: existing.status,
+      answers: existing.answers,
+    },
+    questions: await safeQuestions(questionOrder, existing.optionOrders),
+  });
+}
+
+if (existing) {
+  return sendError(res, 409, 'ATTEMPT_EXISTS', 'An attempt already exists for this exam.');
+}
+
+const questionOrder = exam.shuffleQuestions
+  ? shuffled(exam.questionIds)
+  : [...exam.questionIds];
+
+const optionOrders = {};
+
+for (const questionId of questionOrder) {
+  const question = await Question.findById(questionId);
+  if (!question) continue;
+
+  const optionIds = question.options.map((option) => String(option._id));
+
+  optionOrders[String(questionId)] = exam.shuffleOptions
+    ? shuffled(optionIds)
+    : optionIds;
+}
+
+try {
+  attempt = await Attempt.create({
+    examId: exam._id,
+    studentId: req.user._id,
+    startedAt: now,
+    endsAt,
+    answers: exam.questionIds.map((questionId) => ({ questionId })),
+    questionOrder,
+    optionOrders,
+  });
+} catch (e) {
+  if (e.code === 11000) {
+    return sendError(res, 409, 'ATTEMPT_EXISTS', 'An attempt already exists for this exam.');
+  }
+  throw e;
+}
+
+await writeAudit(req, 'ATTEMPT_STARTED', { examId: exam.id, attemptId: attempt.id });
+
+return res.status(201).json({
+  attempt: {
+    id: attempt.id,
+    examId: exam.id,
+    endsAt: attempt.endsAt,
+    status: attempt.status,
+    answers: attempt.answers,
+  },
+  questions: await safeQuestions(questionOrder, attempt.optionOrders),
 });
+} catch (e) { next(e); }
+});
+
 app.get('/api/attempts/mine', authenticate, requireRole('Student'), async (req, res, next) => {
   try {
     const attempts = await Attempt.find({
@@ -316,7 +390,19 @@ app.get('/api/attempts/:attemptId', authenticate, requireRole('Student'), async 
       if (attempt.status !== 'SUBMITTED') return finalizationRetry(res);
     }
     if (attempt.status === 'SUBMITTED') return res.json({ attempt: resultView(attempt, exam) });
-    res.json({ attempt: { id: attempt.id, status: attempt.status, endsAt: attempt.endsAt, answers: attempt.answers }, questions: await safeQuestions(exam.questionIds) });
+    const questionOrder = attempt.questionOrder?.length
+  ? attempt.questionOrder
+  : exam.questionIds;
+
+res.json({
+  attempt: {
+    id: attempt.id,
+    status: attempt.status,
+    endsAt: attempt.endsAt,
+    answers: attempt.answers,
+  },
+  questions: await safeQuestions(questionOrder, attempt.optionOrders),
+});
   } catch (e) { next(e); }
 });
 app.put('/api/attempts/:attemptId/answers/:questionId', authenticate, requireRole('Student'), requireCsrf, async (req, res, next) => {
@@ -452,10 +538,45 @@ app.use((err, _req, res, _next) => {
   console.error('Request failed:', err.message); if (res.headersSent) return; sendError(res, 500, 'INTERNAL_ERROR', 'An unexpected server error occurred.');
 });
 
-async function safeQuestions(ids) {
-  const docs = await Question.find({ _id: { $in: ids } });
-  return ids.map((id) => { const q = docs.find((d) => String(d._id) === String(id)); return { id: String(id), text: q.text, options: q.options.map((o) => ({ id: o._id, text: o.text })), marks: q.marks }; });
+
+function shuffled(items) {
+  const result = [...items];
+
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+
+  return result;
 }
+
+
+
+async function safeQuestions(ids, optionOrders = null) {
+  const docs = await Question.find({ _id: { $in: ids } });
+
+  return ids.map((id) => {
+    const q = docs.find((d) => String(d._id) === String(id));
+    const savedOrder = optionOrders?.get
+      ? optionOrders.get(String(id))
+      : optionOrders?.[String(id)];
+
+    const options = q.options.map((o) => ({ id: o._id, text: o.text }));
+    const orderedOptions = savedOrder?.length
+      ? savedOrder
+          .map((optionId) => options.find((o) => String(o.id) === String(optionId)))
+          .filter(Boolean)
+      : options;
+
+    return {
+      id: String(id),
+      text: q.text,
+      options: orderedOptions,
+      marks: q.marks,
+    };
+  });
+}
+
 async function finishAttempt(attempt, exam, req = null) {
   if (attempt.status === 'SUBMITTED') return persistSubmissionAudit(attempt);
   const now = new Date();
@@ -569,6 +690,8 @@ function examView(exam, includeConfiguration = false) {
     ...view,
     passMark: exam.passMark,
     negativeMark: exam.negativeMark,
+    shuffleQuestions: exam.shuffleQuestions,
+    shuffleOptions: exam.shuffleOptions,
     reviewEnabled: exam.reviewEnabled,
     questionIds: exam.questionIds.map(String),
     assignedStudentIds: exam.assignedStudentIds.map(String),
