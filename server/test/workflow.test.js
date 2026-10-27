@@ -197,20 +197,33 @@ describe('SRS-aligned exam workflow', () => {
     await studentAgent.post(`/api/exams/${exam.body.id}/attempts`).set('x-csrf-token', csrfStudent)
       .expect(409).expect(({ body }) => assert.equal(body.error.code, 'EXAM_CLOSED'));
   });
-  it('publishes an exam with its selected schedule, scoring, questions, and student assignments', async () => {
-    const configured = await instructorAgent.post('/api/exams').set('x-csrf-token', csrfInstructor).send({
-      title: 'Configured exam', durationMinutes: 45,
-      startAt: new Date(Date.now() - 60_000).toISOString(), endAt: new Date(Date.now() + 3_600_000).toISOString(),
-      passMark: 1, negativeMark: 0.25, questionIds: [questionId], assignedStudentIds: [String(student._id)], reviewEnabled: true,
-    }).expect(201);
-    const stored = await Exam.findById(configured.body.id);
-    assert.equal(stored.durationMinutes, 45);
-    assert.equal(stored.negativeMark, 0.25);
-    assert.equal(stored.reviewEnabled, true);
-    assert.equal(stored.status, 'Published');
-    assert.deepEqual(stored.questionIds.map(String), [questionId]);
-    assert.deepEqual(stored.assignedStudentIds.map(String), [String(student._id)]);
-  });
+  
+it('publishes an exam with its selected schedule, scoring, questions, student assignments, and shuffle settings', async () => {
+  const configured = await instructorAgent.post('/api/exams').set('x-csrf-token', csrfInstructor).send({
+    title: 'Configured exam',
+    durationMinutes: 45,
+    startAt: new Date(Date.now() - 60_000).toISOString(),
+    endAt: new Date(Date.now() + 3_600_000).toISOString(),
+    passMark: 1,
+    negativeMark: 0.25,
+    questionIds: [questionId],
+    assignedStudentIds: [String(student._id)],
+    reviewEnabled: true,
+    shuffleQuestions: true,
+    shuffleOptions: true,
+  }).expect(201);
+
+  const stored = await Exam.findById(configured.body.id);
+  assert.equal(stored.durationMinutes, 45);
+  assert.equal(stored.negativeMark, 0.25);
+  assert.equal(stored.reviewEnabled, true);
+  assert.equal(stored.shuffleQuestions, true);
+  assert.equal(stored.shuffleOptions, true);
+  assert.equal(stored.status, 'Published');
+  assert.deepEqual(stored.questionIds.map(String), [questionId]);
+  assert.deepEqual(stored.assignedStudentIds.map(String), [String(student._id)]);
+});
+
   it('limits exam listing and attempts to assigned student accounts', async () => {
     const list = await studentAgent.get('/api/exams').expect(200); assert.ok(list.body.exams.length >= 1);
     assert.ok(list.body.exams.some((exam) => exam.id === examId));
@@ -220,6 +233,38 @@ describe('SRS-aligned exam workflow', () => {
     assert.equal(started.body.questions[0].correctOptionId, undefined);
     await strangerAgent.post(`/api/exams/${examId}/attempts`).set('x-csrf-token', csrfStranger).expect(404);
   });
+  
+it('keeps question and option order stable when a student resumes an attempt', async () => {
+  const started = await studentAgent
+  .post(`/api/exams/${examId}/attempts`)
+  .set('x-csrf-token', csrfStudent)
+  .expect(200);
+
+  const firstQuestionOrder = started.body.questions.map((question) => question.id);
+  const firstOptionOrders = started.body.questions.map((question) => ({
+    questionId: question.id,
+    optionIds: question.options.map((option) => option.id),
+  }));
+
+  const resumed = await studentAgent
+    .post(`/api/exams/${examId}/attempts`)
+    .set('x-csrf-token', csrfStudent)
+    .expect(200);
+
+  assert.deepEqual(
+    resumed.body.questions.map((question) => question.id),
+    firstQuestionOrder,
+  );
+
+  assert.deepEqual(
+    resumed.body.questions.map((question) => ({
+      questionId: question.id,
+      optionIds: question.options.map((option) => option.id),
+    })),
+    firstOptionOrders,
+  );
+});
+
   it('saves answers and submits a server-scored result once', async () => {
     const beforeFocus = await Attempt.findById(attemptId);
     assert.equal(beforeFocus.focusEvents.length, 0);
