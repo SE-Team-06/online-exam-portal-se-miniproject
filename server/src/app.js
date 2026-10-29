@@ -1,4 +1,4 @@
-﻿import express from 'express';
+import express from 'express';
 import mongoose from 'mongoose';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
@@ -269,6 +269,7 @@ if (existing?.status === 'IN_PROGRESS' && existing.endsAt > now) {
       answers: existing.answers,
     },
     questions: await safeQuestions(questionOrder, existing.optionOrders),
+    serverTime: new Date(),
   });
 }
 
@@ -321,6 +322,7 @@ return res.status(201).json({
     answers: attempt.answers,
   },
   questions: await safeQuestions(questionOrder, attempt.optionOrders),
+  serverTime: new Date(),
 });
 } catch (e) { next(e); }
 });
@@ -417,6 +419,7 @@ res.json({
     answers: attempt.answers,
   },
   questions: await safeQuestions(questionOrder, attempt.optionOrders),
+  serverTime: new Date(),
 });
   } catch (e) { next(e); }
 });
