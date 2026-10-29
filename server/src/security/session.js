@@ -29,8 +29,8 @@ export function readCookie(header, name) {
   return null;
 }
 
-export function sessionCookie(token, { clear = false } = {}) {
+export function sessionCookie(token, { clear = false, secure = true } = {}) {
   const maxAge = clear ? 0 : INACTIVITY_MS;
   const value = clear ? '' : encodeURIComponent(token);
-  return `${COOKIE_NAME}=${value}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${Math.floor(maxAge / 1000)}`;
+  return `${COOKIE_NAME}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${Math.floor(maxAge / 1000)}${secure ? '; Secure' : ''}`;
 }

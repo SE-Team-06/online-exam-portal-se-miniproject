@@ -631,3 +631,79 @@ it('keeps question and option order stable when a student resumes an attempt', a
       .expect(429);
   });
 });
+
+describe('negative marking (FR-OE-010)', () => {
+  let extraQuestionIds;
+  const answer = (attempt, question, selectedOptionId) => studentAgent.put(`/api/attempts/${attempt}/answers/${question}`).set('x-csrf-token', csrfStudent).send({ selectedOptionId, flagged: false }).expect(200);
+  const startAttempt = async (exam) => (await studentAgent.post(`/api/exams/${exam}/attempts`).set('x-csrf-token', csrfStudent).expect(201)).body.attempt.id;
+  before(async () => {
+    extraQuestionIds = [];
+    for (const marks of [3, 1]) {
+      const q = await instructorAgent.post('/api/questions').set('x-csrf-token', csrfInstructor).send({ text: `Negative marking question worth ${marks}`, options: [{ id: 'a', text: 'Right' }, { id: 'b', text: 'Wrong' }], correctOptionId: 'a', marks }).expect(201);
+      extraQuestionIds.push(q.body.id);
+    }
+  });
+  it('deducts the configured mark for wrong answers only, end to end', async () => {
+    const exam = await instructorAgent.post('/api/exams').set('x-csrf-token', csrfInstructor).send(examPayload({ title: 'Negative marking on', negativeMark: 1, questionIds: [questionId, ...extraQuestionIds] })).expect(201);
+    const attempt = await startAttempt(exam.body.id);
+    await answer(attempt, questionId, 'a');
+    await answer(attempt, extraQuestionIds[0], 'b');
+    const result = await studentAgent.post(`/api/attempts/${attempt}/submit`).set('x-csrf-token', csrfStudent).expect(200);
+    assert.equal(result.body.attempt.score, 1);
+    assert.equal(result.body.attempt.passed, true);
+  });
+  it('awards marks without deductions when negative marking is disabled', async () => {
+    const exam = await instructorAgent.post('/api/exams').set('x-csrf-token', csrfInstructor).send(examPayload({ title: 'Negative marking off', negativeMark: 0, questionIds: [questionId, ...extraQuestionIds] })).expect(201);
+    const attempt = await startAttempt(exam.body.id);
+    await answer(attempt, questionId, 'a');
+    await answer(attempt, extraQuestionIds[0], 'b');
+    const result = await studentAgent.post(`/api/attempts/${attempt}/submit`).set('x-csrf-token', csrfStudent).expect(200);
+    assert.equal(result.body.attempt.score, 2);
+  });
+  it('shows the rule to the instructor and lets it change only until a student starts', async () => {
+    const exam = await instructorAgent.post('/api/exams').set('x-csrf-token', csrfInstructor).send(examPayload({ title: 'Negative marking lock', negativeMark: 0.5 })).expect(201);
+    const listed = (await instructorAgent.get('/api/exams').expect(200)).body.exams.find((item) => item.id === exam.body.id);
+    assert.equal(listed.negativeMark, 0.5);
+    await instructorAgent.put(`/api/exams/${exam.body.id}`).set('x-csrf-token', csrfInstructor).send(examPayload({ title: 'Negative marking lock', negativeMark: 0.25, startAt: exam.body.startAt, endAt: exam.body.endAt })).expect(200);
+    await startAttempt(exam.body.id);
+    await instructorAgent.put(`/api/exams/${exam.body.id}`).set('x-csrf-token', csrfInstructor).send(examPayload({ title: 'Negative marking lock', negativeMark: 1, startAt: exam.body.startAt, endAt: exam.body.endAt }))
+      .expect(409).expect(({ body }) => assert.equal(body.error.code, 'EXAM_LOCKED'));
+    assert.equal((await Exam.findById(exam.body.id)).negativeMark, 0.25);
+  });
+});
+
+describe('exam page: server time, flags and focus-loss reporting (FR-OE-015, FR-OE-021, FR-OE-024, NFR-OE-010)', () => {
+  it('returns server time, keeps flags across resume and reports focus losses to the instructor', async () => {
+    const exam = await instructorAgent.post('/api/exams').set('x-csrf-token', csrfInstructor).send(examPayload({ title: '=Focus report' })).expect(201);
+    const before = Date.now();
+    const started = await studentAgent.post(`/api/exams/${exam.body.id}/attempts`).set('x-csrf-token', csrfStudent).expect(201);
+    const attempt = started.body.attempt.id;
+    assert.ok(Math.abs(new Date(started.body.serverTime).getTime() - before) < 5_000);
+
+    const saved = await studentAgent.put(`/api/attempts/${attempt}/answers/${questionId}`).set('x-csrf-token', csrfStudent).send({ selectedOptionId: null, flagged: true }).expect(200);
+    assert.ok(saved.body.serverTime);
+    const resumed = await studentAgent.post(`/api/exams/${exam.body.id}/attempts`).set('x-csrf-token', csrfStudent).expect(200);
+    assert.equal(resumed.body.attempt.answers.find((answer) => String(answer.questionId) === questionId).flagged, true);
+    assert.ok(resumed.body.serverTime);
+
+    await studentAgent.post(`/api/attempts/${attempt}/focus-loss`).set('x-csrf-token', csrfStudent).expect(204);
+    await studentAgent.post(`/api/attempts/${attempt}/focus-loss`).set('x-csrf-token', csrfStudent).expect(204);
+    await studentAgent.put(`/api/attempts/${attempt}/answers/${questionId}`).set('x-csrf-token', csrfStudent).send({ selectedOptionId: 'a', flagged: false }).expect(200);
+    await studentAgent.post(`/api/attempts/${attempt}/submit`).set('x-csrf-token', csrfStudent).expect(200);
+
+    const report = await instructorAgent.get('/api/instructor/results').expect(200);
+    const row = report.body.results.find((item) => item.attemptId === attempt);
+    assert.equal(row.focusLossCount, 2);
+    assert.equal(row.focusLossTimes.length, 2);
+    const stats = report.body.examStatistics.find((item) => item.examId === exam.body.id);
+    assert.deepEqual([stats.totalAttempts, stats.highestScore, stats.lowestScore, stats.averageScore, stats.passRate], [1, 2, 2, 2, 1]);
+    for (const key of ['highestScore', 'lowestScore']) assert.ok(key in report.body.statistics);
+
+    const csv = await instructorAgent.get('/api/instructor/results.csv').expect(200);
+    const [header, ...lines] = csv.text.split('\r\n');
+    assert.match(header, /focusLossCount$/);
+    const line = lines.find((item) => item.includes('Focus report'));
+    assert.ok(line.startsWith(`"'=Focus report"`), 'formula-like cells are neutralised');
+    assert.ok(line.endsWith('"2"'));
+  });
+});

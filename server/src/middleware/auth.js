@@ -1,5 +1,6 @@
 import { AuditLog, Session, User } from '../models/index.js';
-import { COOKIE_NAME, hashToken, readCookie, tokensMatch, INACTIVITY_MS } from '../security/session.js';
+import { COOKIE_NAME, hashToken, readCookie, sessionCookie, tokensMatch, INACTIVITY_MS } from '../security/session.js';
+import { httpsRequired } from '../security/transport.js';
 
 export function sendError(res, status, code, message) {
   return res.status(status).json({ error: { code, message } });
@@ -14,7 +15,7 @@ export async function authenticate(req, res, next) {
     const now = new Date();
     if (now.getTime() - session.lastActivity.getTime() >= INACTIVITY_MS || session.expiresAt <= now) {
       await session.deleteOne();
-      res.setHeader('Set-Cookie', `${COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`);
+      res.setHeader('Set-Cookie', sessionCookie('', { clear: true, secure: httpsRequired() }));
       return sendError(res, 401, 'UNAUTHENTICATED', 'The session has expired.');
     }
     const user = await User.findById(session.userId);
