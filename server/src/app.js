@@ -1,16 +1,19 @@
 ﻿import express from 'express';
+import mongoose from 'mongoose';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import { Attempt, AuditLog, Exam, Notification, Question, Session, User } from './models/index.js';
 import { authenticate, requireCsrf, requireRole, sendError, writeAudit } from './middleware/auth.js';
 import { verifyPassword } from './security/password.js';
-import { COOKIE_NAME, newOpaqueToken, hashToken, INACTIVITY_MS } from './security/session.js';
+import { newOpaqueToken, hashToken, INACTIVITY_MS, sessionCookie } from './security/session.js';
+import { httpsRequired, requireHttps } from './security/transport.js';
 import { calculateScore } from './domain/scoring.js';
 
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
+app.use(requireHttps);
 app.use(helmet());
 app.use(express.json({ limit: '32kb' }));
 const loginLimit = rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
@@ -19,7 +22,11 @@ const bad = (res, issues) => sendError(res, 400, 'VALIDATION_ERROR', issues[0]?.
 const asPublicUser = (user) => ({ id: user.id, name: user.name, email: user.email, role: user.role });
 const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid identifier.');
 
-app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+app.get('/api/health', async (_req, res) => {
+  let database = 'down';
+  try { if (mongoose.connection.readyState === 1) { await mongoose.connection.db.admin().ping(); database = 'up'; } } catch { database = 'down'; }
+  res.status(database === 'up' ? 200 : 503).json({ status: database === 'up' ? 'ok' : 'degraded', database, time: new Date() });
+});
 app.post('/api/auth/login', loginLimit, async (req, res, next) => {
   try {
     const parsed = z.object({ email: z.string().email().max(254), password: z.string().min(1).max(128) }).safeParse(req.body);
@@ -39,13 +46,13 @@ app.post('/api/auth/login', loginLimit, async (req, res, next) => {
     user.failedLogins = 0; user.lockedUntil = null; await user.save();
     const token = newOpaqueToken(); const csrfToken = newOpaqueToken();
     await Session.create({ tokenHash: hashToken(token), csrfToken, userId: user._id, lastActivity: now, expiresAt: new Date(now.getTime() + INACTIVITY_MS) });
-    res.setHeader('Set-Cookie', `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${INACTIVITY_MS / 1000}${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
+    res.setHeader('Set-Cookie', sessionCookie(token, { secure: httpsRequired() }));
     await AuditLog.create({ action: 'LOGIN_SUCCESS', userId: user._id, ip: req.ip });
     res.json({ user: asPublicUser(user), csrfToken });
   } catch (error) { next(error); }
 });
 app.post('/api/auth/logout', authenticate, requireCsrf, async (req, res, next) => {
-  try { await req.sessionRecord.deleteOne(); await writeAudit(req, 'LOGOUT'); res.setHeader('Set-Cookie', `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`); res.status(204).end(); } catch (e) { next(e); }
+  try { await req.sessionRecord.deleteOne(); await writeAudit(req, 'LOGOUT'); res.setHeader('Set-Cookie', sessionCookie('', { clear: true, secure: httpsRequired() })); res.status(204).end(); } catch (e) { next(e); }
 });
 app.get('/api/auth/me', authenticate, (req, res) => res.json({ user: asPublicUser(req.user), csrfToken: req.sessionRecord.csrfToken }));
 app.get('/api/notifications', authenticate, async (req, res, next) => {
@@ -356,13 +363,21 @@ app.get('/api/instructor/results', authenticate, requireRole('Instructor', 'Admi
       score: attempt.score, maximumScore: attempt.maximumScore, passed: attempt.passed,
       correctCount: attempt.correctCount, wrongCount: attempt.wrongCount, unansweredCount: attempt.unansweredCount,
       submittedAt: attempt.submittedAt,
+      focusLossCount: attempt.focusEvents.length, focusLossTimes: attempt.focusEvents,
     }));
-    const total = rows.length;
-    res.json({ results: rows, statistics: {
-      totalAttempts: total,
-      averageScore: total ? rows.reduce((sum, row) => sum + row.score, 0) / total : 0,
-      passRate: total ? rows.filter((row) => row.passed).length / total : 0,
-    } });
+    const summarize = (subset) => {
+      const scores = subset.map((row) => row.score);
+      return {
+        totalAttempts: subset.length,
+        averageScore: subset.length ? scores.reduce((sum, score) => sum + score, 0) / subset.length : 0,
+        highestScore: subset.length ? Math.max(...scores) : 0,
+        lowestScore: subset.length ? Math.min(...scores) : 0,
+        passRate: subset.length ? subset.filter((row) => row.passed).length / subset.length : 0,
+      };
+    };
+    res.json({ results: rows, statistics: summarize(rows), examStatistics: exams.map((exam) => ({
+      examId: exam.id, examTitle: exam.title, ...summarize(rows.filter((row) => String(row.examId) === exam.id)),
+    })) });
   } catch (e) { next(e); }
 });
 app.get('/api/instructor/results.csv', authenticate, requireRole('Instructor', 'Administrator'), async (req, res, next) => {
@@ -371,11 +386,11 @@ app.get('/api/instructor/results.csv', authenticate, requireRole('Instructor', '
     const attempts = await Attempt.find({ examId: { $in: exams.map((exam) => exam._id) }, status: 'SUBMITTED' })
       .populate('studentId', 'name email').sort({ submittedAt: -1 });
     const examById = new Map(exams.map((exam) => [String(exam._id), exam.title]));
-    const fields = ['exam', 'student', 'email', 'score', 'maximumScore', 'passed', 'submittedAt'];
-    const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+    const fields = ['exam', 'student', 'email', 'score', 'maximumScore', 'passed', 'submittedAt', 'focusLossCount'];
+    const escape = (value) => { const text = String(value ?? ''); return `"${(/^[=+\-@]/.test(text) ? `'${text}` : text).replaceAll('"', '""')}"`; };
     const lines = [fields.join(','), ...attempts.map((attempt) => [
       examById.get(String(attempt.examId)), attempt.studentId?.name, attempt.studentId?.email,
-      attempt.score, attempt.maximumScore, attempt.passed, attempt.submittedAt?.toISOString(),
+      attempt.score, attempt.maximumScore, attempt.passed, attempt.submittedAt?.toISOString(), attempt.focusEvents.length,
     ].map(escape).join(','))];
     res.type('text/csv').set('Content-Disposition', 'attachment; filename="exam-results.csv"').send(lines.join('\r\n'));
   } catch (e) { next(e); }
@@ -440,7 +455,7 @@ app.put('/api/attempts/:attemptId/answers/:questionId', authenticate, requireRol
       }
       return sendError(res, 409, 'ATTEMPT_ENDED', 'The attempt has ended.');
     }
-    res.json({ saved: true });
+    res.json({ saved: true, serverTime: new Date() });
   } catch (e) { next(e); }
 });
 app.post('/api/attempts/:attemptId/focus-loss', authenticate, requireRole('Student'), requireCsrf, async (req, res, next) => {
@@ -530,6 +545,28 @@ app.get('/api/attempts/:attemptId/review', authenticate, requireRole('Student'),
   } catch (e) {
     next(e);
   }
+});
+
+// NFR-OE-014: an Administrator can delete the data of a deactivated account on request.
+// Audit records are kept (SEC-OE-011 requires 12-month retention); they hold only the user ID.
+app.delete('/api/admin/users/:userId/data', authenticate, requireRole('Administrator'), requireCsrf, async (req, res, next) => {
+  try {
+    if (!objectId.safeParse(req.params.userId).success) return sendError(res, 400, 'INVALID_ID', 'Invalid user identifier.');
+    const user = await User.findById(req.params.userId);
+    if (!user) return sendError(res, 404, 'USER_NOT_FOUND', 'User not found.');
+    if (user.active) return sendError(res, 409, 'USER_ACTIVE', 'Deactivate the account before deleting its data.');
+    if (await Exam.exists({ ownerId: user._id }) || await Question.exists({ ownerId: user._id })) {
+      return sendError(res, 409, 'USER_OWNS_CONTENT', 'Reassign or remove this account\'s questions and exams first.');
+    }
+    const [attempts, notifications, sessions] = await Promise.all([
+      Attempt.deleteMany({ studentId: user._id }), Notification.deleteMany({ recipientId: user._id }), Session.deleteMany({ userId: user._id }),
+    ]);
+    await Exam.updateMany({ assignedStudentIds: user._id }, { $pull: { assignedStudentIds: user._id } });
+    await user.deleteOne();
+    const deleted = { attempts: attempts.deletedCount, notifications: notifications.deletedCount, sessions: sessions.deletedCount, user: 1 };
+    await writeAudit(req, 'USER_DATA_DELETED', { deletedUserId: req.params.userId, ...deleted });
+    res.json({ deleted });
+  } catch (e) { next(e); }
 });
 
 app.use((_req, res) => sendError(res, 404, 'NOT_FOUND', 'The requested resource was not found.'));
