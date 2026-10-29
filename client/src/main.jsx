@@ -59,8 +59,6 @@ function App() {
   const [editingExamId, setEditingExamId] = useState('');
   const now = new Date();
   const [examDraft, setExamDraft] = useState({
-    shuffleQuestions: false,
-    shuffleOptions: false,
     title: '', durationMinutes: 30, startAt: localDateTime(now),
     endAt: localDateTime(new Date(now.getTime() + 60 * 60_000)), passMark: 1,
     negativeMarkEnabled: false, negativeMark: 0.25, reviewEnabled: false,
