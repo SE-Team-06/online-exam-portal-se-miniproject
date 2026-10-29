@@ -59,6 +59,8 @@ function App() {
   const [editingExamId, setEditingExamId] = useState('');
   const now = new Date();
   const [examDraft, setExamDraft] = useState({
+    shuffleQuestions: false,
+    shuffleOptions: false,
     title: '', durationMinutes: 30, startAt: localDateTime(now),
     endAt: localDateTime(new Date(now.getTime() + 60 * 60_000)), passMark: 1,
     negativeMarkEnabled: false, negativeMark: 0.25, reviewEnabled: false,
@@ -288,11 +290,17 @@ setExams(refreshed.exams);
   function resetExamForm() {
     const createdAt = new Date();
     setEditingExamId('');
+    setExamDraft({ shuffleQuestions: false,
+shuffleOptions: false, title: '', durationMinutes: 30, startAt: localDateTime(createdAt), endAt: localDateTime(new Date(createdAt.getTime() + 60 * 60_000)), passMark: 1, negativeMark: 0, reviewEnabled: false });
     setExamDraft({ title: '', durationMinutes: 30, startAt: localDateTime(createdAt), endAt: localDateTime(new Date(createdAt.getTime() + 60 * 60_000)), passMark: 1, negativeMarkEnabled: false, negativeMark: 0.25, reviewEnabled: false });
     setSelectedQuestionIds([]); setAssignedStudentIds([]);
   }
   function editExam(exam) {
     setError(''); setNotice(''); setEditingExamId(exam.id);
+    setExamDraft({ title: exam.title, durationMinutes: exam.durationMinutes, startAt: localDateTime(new Date(exam.startAt)), endAt: localDateTime(new Date(exam.endAt)), passMark: exam.passMark, negativeMark: exam.negativeMark,
+shuffleQuestions: exam.shuffleQuestions,
+shuffleOptions: exam.shuffleOptions,
+reviewEnabled: exam.reviewEnabled });
     setExamDraft({ title: exam.title, durationMinutes: exam.durationMinutes, startAt: localDateTime(new Date(exam.startAt)), endAt: localDateTime(new Date(exam.endAt)), passMark: exam.passMark, negativeMarkEnabled: exam.negativeMark > 0, negativeMark: exam.negativeMark > 0 ? exam.negativeMark : 0.25, reviewEnabled: exam.reviewEnabled });
     setSelectedQuestionIds(exam.questionIds); setAssignedStudentIds(exam.assignedStudentIds);
   }
@@ -313,6 +321,9 @@ setExams(refreshed.exams);
         body: {
           title: examDraft.title, durationMinutes: Number(examDraft.durationMinutes),
           startAt: startAt.toISOString(), endAt: endAt.toISOString(),
+          passMark: Number(examDraft.passMark), negativeMark: Number(examDraft.negativeMark),
+          questionIds: selectedQuestionIds, assignedStudentIds,shuffleQuestions: examDraft.shuffleQuestions,
+shuffleOptions: examDraft.shuffleOptions, reviewEnabled: examDraft.reviewEnabled,
           passMark: Number(examDraft.passMark), negativeMark: negativeMarkPayload(examDraft.negativeMarkEnabled, examDraft.negativeMark),
           questionIds: selectedQuestionIds, assignedStudentIds, reviewEnabled: examDraft.reviewEnabled,
         },
@@ -355,6 +366,37 @@ setExams(refreshed.exams);
 </article>) : <p className="empty">No exams are assigned to your account yet.</p>}</section></>
       : <><section className="exam-list"><p className="eyebrow">INSTRUCTOR VIEW</p><h2>Your exams</h2>{exams.length ? exams.map((exam) => <article className="exam-card" key={exam.id}><div className="exam-icon">✦</div><div className="exam-info"><h3>{exam.title}</h3><p>{exam.durationMinutes} minutes · {exam.status} · {describeNegativeMarking(exam.negativeMark)}</p></div><div className="question-actions"><button className="text-button" type="button" onClick={() => editExam(exam)} disabled={busy}>Edit</button></div></article>) : <p className="empty">No exams created yet.</p>}</section><section className="exam-list"><div className="section-heading"><div><p className="eyebrow">RESULTS</p><h2>Attempts and statistics</h2></div>{instructorResults?.results.length ? <a className="text-button" href="/api/instructor/results.csv" download>Download CSV</a> : null}</div>{instructorResults?.examStatistics?.filter((stat) => stat.totalAttempts).length ? <div className="stat-grid">{instructorResults.examStatistics.filter((stat) => stat.totalAttempts).map((stat) => <article className="stat-card" key={stat.examId}><h3>{stat.examTitle}</h3><p>{stat.totalAttempts} attempt{stat.totalAttempts === 1 ? '' : 's'} · {Math.round(stat.passRate * 100)}% passed</p><p>Average {stat.averageScore.toFixed(1)} · Highest {stat.highestScore} · Lowest {stat.lowestScore}</p></article>)}</div> : null}{instructorResults?.results.length ? <div className="table-wrap"><table className="results-table"><thead><tr><th scope="col">Student</th><th scope="col">Exam</th><th scope="col">Score</th><th scope="col">Result</th><th scope="col">Tab switches</th><th scope="col">Submitted</th></tr></thead><tbody>{instructorResults.results.map((row) => <tr key={row.attemptId}><td>{row.studentName}<small>{row.studentEmail}</small></td><td>{row.examTitle}</td><td>{row.score} / {row.maximumScore}</td><td>{row.passed ? 'Passed' : 'Not passed'}</td><td title={row.focusLossTimes?.map((time) => new Date(time).toLocaleTimeString()).join(', ')}>{row.focusLossCount ? <span className="focus-count">{row.focusLossCount}</span> : 0}</td><td>{row.submittedAt ? new Date(row.submittedAt).toLocaleString() : ''}</td></tr>)}</tbody></table></div> : <p className="empty">No submitted attempts yet.</p>}</section>
         <section className="management-grid"><section className="management-card"><p className="eyebrow">QUESTION BANK</p><h2>{editingQuestionId ? 'Edit multiple-choice question' : 'Add a multiple-choice question'}</h2><form className="management-form" onSubmit={createQuestion}><label>Question<input value={questionText} onChange={(event) => setQuestionText(event.target.value)} maxLength={2000} required/></label>{optionTexts.map((value, index) => <label key={index}>Option {index + 1}<input value={value} onChange={(event) => updateOptionText(index, event.target.value)} maxLength={500} required={index < 2}/></label>)}<label>Correct answer<select value={correctOptionId} onChange={(event) => setCorrectOptionId(event.target.value)}>{optionTexts.map((text, index) => text.trim() && <option key={optionIds[index]} value={optionIds[index]}>Option {index + 1}: {text}</option>)}</select></label><label>Marks<input type="number" min="1" max="100" value={questionMarks} onChange={(event) => setQuestionMarks(event.target.value)} required/></label><button className="primary" disabled={busy}>{editingQuestionId ? 'Save changes' : 'Save question'}</button>{editingQuestionId && <button className="text-button" type="button" onClick={resetQuestionForm} disabled={busy}>Cancel edit</button>}</form><h3 className="subheading">Your questions ({questions.length})</h3>{questions.length ? <ul className="management-list">{questions.map((question) => <li key={question.id}><strong>{question.text}</strong><small>{question.options.length} options · {question.marks} mark{question.marks === 1 ? '' : 's'}</small><div className="question-actions"><button className="text-button" type="button" onClick={() => editQuestion(question)} disabled={busy}>Edit</button><button className="text-button" type="button" onClick={() => deleteQuestion(question)} disabled={busy}>Delete</button></div></li>)}</ul> : <p className="empty">Add questions before configuring an exam.</p>}</section>
+          <section className="management-card"><p className="eyebrow">EXAM SETUP</p><h2>{editingExamId ? 'Edit exam configuration' : 'Configure and publish an exam'}</h2><form className="management-form" onSubmit={saveExam}><label>Exam title<input value={examDraft.title} onChange={(event) => setExamDraft((current) => ({ ...current, title: event.target.value }))} maxLength={160} required/></label><label>Duration (minutes)<input type="number" min="1" max="600" value={examDraft.durationMinutes} onChange={(event) => setExamDraft((current) => ({ ...current, durationMinutes: event.target.value }))} required/></label><label>Opens<input type="datetime-local" value={examDraft.startAt} onChange={(event) => setExamDraft((current) => ({ ...current, startAt: event.target.value }))} required/></label><label>Closes<input type="datetime-local" value={examDraft.endAt} onChange={(event) => setExamDraft((current) => ({ ...current, endAt: event.target.value }))} required/></label><label>Pass mark<input type="number" min="0" step="0.5" value={examDraft.passMark} onChange={(event) => setExamDraft((current) => ({ ...current, passMark: event.target.value }))} required/></label><label>Negative mark per wrong answer<input type="number" min="0" max="100" step="0.25" value={examDraft.negativeMark} onChange={(event) => setExamDraft((current) => ({ ...current, negativeMark: event.target.value }))} required/></label><label className="check-label"><input type="checkbox" checked={examDraft.reviewEnabled} onChange={(event) => setExamDraft((current) => ({ ...current, reviewEnabled: event.target.checked }))}/> Allow answer review after exam closes</label>
+<label className="check-label">
+  <input
+    type="checkbox"
+    checked={examDraft.shuffleQuestions}
+    onChange={(event) =>
+      setExamDraft((current) => ({
+        ...current,
+        shuffleQuestions: event.target.checked,
+      }))
+    }
+    disabled={Boolean(editingExamId)}
+  />
+  Shuffle question order
+</label>
+
+<label className="check-label">
+  <input
+    type="checkbox"
+    checked={examDraft.shuffleOptions}
+    onChange={(event) =>
+      setExamDraft((current) => ({
+        ...current,
+        shuffleOptions: event.target.checked,
+      }))
+    }
+    disabled={Boolean(editingExamId)}
+  />
+  Shuffle answer options
+</label>
+<fieldset><legend>Questions</legend>{questions.map((question) => <label className="check-label" key={question.id}><input type="checkbox" checked={selectedQuestionIds.includes(question.id)} onChange={(event) => setSelectedQuestionIds((current) => event.target.checked ? [...current, question.id] : current.filter((id) => id !== question.id))}/>{question.text} ({question.marks} marks)</label>)}{!questions.length && <small>Create questions first.</small>}</fieldset><fieldset><legend>Assign students</legend>{students.map((student) => <label className="check-label" key={student.id}><input type="checkbox" checked={assignedStudentIds.includes(student.id)} onChange={(event) => setAssignedStudentIds((current) => event.target.checked ? [...current, student.id] : current.filter((id) => id !== student.id))}/>{student.name} · {student.email}</label>)}{!students.length && <small>No verified active student accounts are available.</small>}</fieldset><div className="question-actions">{editingExamId && <button className="text-button" type="button" onClick={resetExamForm} disabled={busy}>Cancel</button>}<button className="primary" type="submit" disabled={busy || !questions.length || !selectedQuestionIds.length}>{editingExamId ? 'Save changes' : 'Configure and publish'}</button></div></form></section></section></>}
           <section className="management-card"><p className="eyebrow">EXAM SETUP</p><h2>{editingExamId ? 'Edit exam configuration' : 'Configure and publish an exam'}</h2><form className="management-form" onSubmit={saveExam}><label>Exam title<input value={examDraft.title} onChange={(event) => setExamDraft((current) => ({ ...current, title: event.target.value }))} maxLength={160} required/></label><label>Duration (minutes)<input type="number" min="1" max="600" value={examDraft.durationMinutes} onChange={(event) => setExamDraft((current) => ({ ...current, durationMinutes: event.target.value }))} required/></label><label>Opens<input type="datetime-local" value={examDraft.startAt} onChange={(event) => setExamDraft((current) => ({ ...current, startAt: event.target.value }))} required/></label><label>Closes<input type="datetime-local" value={examDraft.endAt} onChange={(event) => setExamDraft((current) => ({ ...current, endAt: event.target.value }))} required/></label><label>Pass mark<input type="number" min="0" step="0.5" value={examDraft.passMark} onChange={(event) => setExamDraft((current) => ({ ...current, passMark: event.target.value }))} required/></label><label className="check-label"><input type="checkbox" checked={examDraft.negativeMarkEnabled} onChange={(event) => setExamDraft((current) => ({ ...current, negativeMarkEnabled: event.target.checked }))}/> Apply negative marking to wrong answers</label>{examDraft.negativeMarkEnabled && <label>Marks deducted per wrong answer<input type="number" min="0.25" max="100" step="0.25" value={examDraft.negativeMark} onChange={(event) => setExamDraft((current) => ({ ...current, negativeMark: event.target.value }))} required/><small>Unanswered questions are never penalised; the total score cannot go below 0.</small></label>}<label className="check-label"><input type="checkbox" checked={examDraft.reviewEnabled} onChange={(event) => setExamDraft((current) => ({ ...current, reviewEnabled: event.target.checked }))}/> Allow answer review after exam closes</label><fieldset><legend>Questions</legend>{questions.map((question) => <label className="check-label" key={question.id}><input type="checkbox" checked={selectedQuestionIds.includes(question.id)} onChange={(event) => setSelectedQuestionIds((current) => event.target.checked ? [...current, question.id] : current.filter((id) => id !== question.id))}/>{question.text} ({question.marks} marks)</label>)}{!questions.length && <small>Create questions first.</small>}</fieldset><fieldset><legend>Assign students</legend>{students.map((student) => <label className="check-label" key={student.id}><input type="checkbox" checked={assignedStudentIds.includes(student.id)} onChange={(event) => setAssignedStudentIds((current) => event.target.checked ? [...current, student.id] : current.filter((id) => id !== student.id))}/>{student.name} · {student.email}</label>)}{!students.length && <small>No verified active student accounts are available.</small>}</fieldset><div className="question-actions">{editingExamId && <button className="text-button" type="button" onClick={resetExamForm} disabled={busy}>Cancel</button>}<button className="primary" type="submit" disabled={busy || !questions.length || !selectedQuestionIds.length}>{editingExamId ? 'Save changes' : 'Configure and publish'}</button></div></form></section></section></>}
     <footer><span>Online Exam Portal</span><span>Software Engineering Mini-Project</span></footer></main></div>;
 }
