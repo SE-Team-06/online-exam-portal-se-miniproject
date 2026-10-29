@@ -678,6 +678,7 @@ describe('exam page: server time, flags and focus-loss reporting (FR-OE-015, FR-
     const before = Date.now();
     const started = await studentAgent.post(`/api/exams/${exam.body.id}/attempts`).set('x-csrf-token', csrfStudent).expect(201);
     const attempt = started.body.attempt.id;
+    assert.ok(Number.isFinite(new Date(started.body.serverTime).getTime()));
     assert.ok(Math.abs(new Date(started.body.serverTime).getTime() - before) < 5_000);
 
     const saved = await studentAgent.put(`/api/attempts/${attempt}/answers/${questionId}`).set('x-csrf-token', csrfStudent).send({ selectedOptionId: null, flagged: true }).expect(200);
