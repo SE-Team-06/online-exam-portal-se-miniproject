@@ -42,7 +42,6 @@ const examSchema = new Schema({
   locked: { type: Boolean, default: false },
   negativeMark: { type: Number, default: 0, min: 0, max: 100 },
   shuffleQuestions: { type: Boolean, default: false },
-  shuffleOptions: { type: Boolean, default: false },
   reviewEnabled: { type: Boolean, default: false },
 }, { timestamps: true });
 
@@ -59,12 +58,6 @@ const attemptSchema = new Schema({
   endsAt: { type: Date, required: true },
   status: { type: String, enum: ['IN_PROGRESS', 'SUBMITTED'], default: 'IN_PROGRESS' },
   answers: [answerSchema],
-  questionOrder: [{ type: Schema.Types.ObjectId, ref: 'Question' }],
-optionOrders: {
-  type: Map,
-  of: [{ type: String }],
-  default: {},
-},
   focusEvents: [{ type: Date }],
   submittedAt: { type: Date, default: null },
   submissionAuditPending: { type: Boolean, default: false },
