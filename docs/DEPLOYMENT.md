@@ -39,7 +39,7 @@ BACKUP_INTERVAL_HOURS=24
 BACKUP_RETAIN=7
 ```
 
-`MONGODB_URI` is required. MongoDB is the only application data service. `PORT` defaults to 4000; `APP_ORIGIN` defaults to the local Vite address and must be the deployed site's exact origin. `NODE_ENV=production` enforces HTTPS and Secure session cookies; TLS must terminate at the proxy. `SESSION_INACTIVITY_MINUTES` defaults to 30. `BACKUP_DIR` enables scheduled backups; when enabled, create that directory and grant the service account write access. The backup settings default to 24 hours and seven retained files. Store credentials outside the repository and URL-encode special characters in the MongoDB password.
+`MONGODB_URI` is required. `PORT` defaults to 4000; `APP_ORIGIN` must be the deployed site's exact origin. `NODE_ENV=production` enforces HTTPS and Secure session cookies; TLS must terminate at the proxy. `SESSION_INACTIVITY_MINUTES` defaults to 30. Registration and password-reset email require `SMTP_URL` (a Nodemailer SMTP connection URL) and `MAIL_FROM`; without them, registration returns an email-delivery error and reset requests do not send a link. Use a dedicated mail account, keep its URL outside the repository, and verify delivery and link expiry in the target environment. `BACKUP_DIR` enables scheduled backups; when enabled, create that directory and grant the service account write access. The backup settings default to 24 hours and seven retained files. Store credentials outside the repository and URL-encode special characters in the MongoDB password.
 
 If configuring via dotenv instead of a service manager, put the file at `server/.env` because npm runs the server with that workspace as its working directory. Do not commit it.
 
@@ -101,7 +101,7 @@ location / {
 }
 ```
 
-Configure port 80 to redirect to HTTPS, restrict the firewall to SSH and web traffic, and keep port 4000 and MongoDB private. The app trusts one proxy hop; do not put additional untrusted proxies between nginx and the app. Reload nginx and verify `https://exam.example.edu/api/health` plus a browser login with provisioned accounts. Account registration/provisioning is outside this deployment setup.
+Configure port 80 to redirect to HTTPS, restrict the firewall to SSH and web traffic, and keep port 4000 and MongoDB private. The app trusts one proxy hop; do not put additional untrusted proxies between nginx and the app. Reload nginx and verify `https://exam.example.edu/api/health`, registration email delivery, verification expiry, reset expiry, and browser login. Administrator-created accounts can also be managed in the admin workspace.
 
 ## Upgrade and operations
 

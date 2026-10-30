@@ -1,47 +1,52 @@
-# Repository audit
+# Repository and Deliverable 2 audit
 
-Audit date: 13 October 2026. This report describes the existing clone and current local work on `feature/mvp-exam-workflow`; it does not claim remote changes.
+**Audit date:** 30 October 2026
+**Repository:** [SE-Team-06/online-exam-portal-se-miniproject](https://github.com/SE-Team-06/online-exam-portal-se-miniproject)
+**Local feature branch:** `feature/oepse-1-3-account-lifecycle`, based on `origin/main` at `c124fec354ee91fe746cf989b32ae6b1f07bacd9`.
 
-## Git state
+This audit distinguishes live remote evidence from local verification and historical notes. The Part 1/Part 2 PDFs and the supplied template DOCX files were not present in this checkout, so the official assignment wording still needs a final cross-check against the submitted PDFs. Existing SRS, SAD, STP, RTM, and architecture/security documents remain the requirements sources of truth; no requirement was changed here.
 
-- Existing repository: `https://github.com/chhavi2308-s/online-exam-portal-se-miniproject.git`; clone retained in the workspace and original history preserved.
-- Feature branch was created from original `main` at `a83639eed69e604d3b13413b131075b489c7569c` (`Update test plan and test cases`); original `main`/`origin/main` were not changed.
-- Authorized implementation/documentation work is committed locally on the feature branch. No push, PR, merge, history rewrite, or remote-setting change has been performed.
-- Original SRS, SAD, STP, RTM, STRIDE, and design files were preserved. RTM workbook was intentionally updated to carry evidence-based implementation statuses and an `Implementation Evidence` sheet.
+## Repository state
 
-## Stack and source
+- `origin` is the organization repository: `https://github.com/SE-Team-06/online-exam-portal-se-miniproject.git`.
+- The checkout was refreshed from the canonical remote without deleting the earlier worktree or its changes. The original local audit edits were stashed intact on the prior branch before creating this review branch.
+- The initial review branch was clean before audit edits; latest fetched `main` is merge commit `c124fec` (PR #59, 30 October). The local feature branch contains implementation and documentation changes for issues #1 and #3; it has not yet been pushed.
+- Runtime available: Node v24.22.1. `npm` is absent from PATH; npm 12.2.1 was run from its official CLI package. Workspace-wide `npm ci` fails on Windows when creating npm's workspace symlink, so server and client dependencies were installed independently without changing the root lockfile.
 
-- MERN-compatible stack specified by SRS: React/Vite client, Node.js/Express API, MongoDB/Mongoose persistence; npm workspaces and lockfile.
-- Entry points: `client/src/main.jsx`, `server/src/index.js`, `server/src/app.js`; disposable demo: `server/src/demo.js`.
-- `.env.example` holds local placeholders only; `.env`, dependencies, build output, test cache and generated logs are ignored.
-- Local CI: `.github/workflows/ci.yml` runs locked install, tests, and build with read-only contents permission on PRs and pushes to `main`.
+## GitHub Project and issues
 
-## Implementation and verification
+- The authenticated GitHub organization page now shows one project, **Online Exam Portal — Software Engineering**, at [SE-Team-06/projects/1](https://github.com/orgs/SE-Team-06/projects/1). It is organization-owned and private. The project exists, correcting the older 22 October screenshot that showed no organization or repository projects.
+- This browser readback established project visibility to the signed-in Chhavi account, but the board itself could not be opened for a fresh item-level audit in this session. Do not infer that the backlog, views, assignments, dates, or repo linkage are correct from the project listing alone. A 25 October handover claimed it was repository-linked but had an empty backlog; that claim is historical until rechecked on the board.
+- Current GitHub issue search showed two open issues, #1 (registration) and #3 (administrator management); most prior implementation backlog issues are closed. Issue closure is not by itself acceptance evidence. The remaining open scopes should be reviewed against SRS acceptance criteria and current code before being treated as sprint outcomes.
+- Team login identities in older live issue records include `chhavi2308-s`, `DhanyaSPrasad`, `gagan-p` and `harshak5`; collaborator permission reads returned 403, so effective access for each person was not verifiable. No assignments or access changes were made.
+- PR #59 was merged to `main`. The GitHub reviews endpoint returned no submitted review for that PR; its merge is verified, but the assignment's owner-review evidence is not. PR #14 and PR #13 are also merged. Do not claim owner review without a review record.
 
-- Implemented slice: provisioned-account authentication and sessions, role/CSRF/origin controls, question/exam APIs, assignment, timed attempt/answer persistence/resume, manual/automatic submission, scoring, student-owned results, selected audit events, and a student-focused UI.
-- Instructor authoring UI, registration/verification/reset, full administrator workflows, analytics/export/notifications, question shuffle/edit lock, production operations, and several other requirements are incomplete or absent. Detailed evidence is in `implementation-gap-register.md` and the RTM evidence sheet.
-- User reported a manual local check: instructor login succeeded and a subject was visible. The locally verified smoke test is limited to API health HTTP 200 and web root HTTP 200.
-- On 13 October 2026, `npm test` passed 12/12 (9 API integration and 3 scoring tests); `npm run build` passed server syntax checks and Vite production build.
-- `npm ci --offline --dry-run` passed. The latest actual offline reinstall failed with Windows EPERM unlinking a native Rolldown module; an earlier actual offline install succeeded. Workflow YAML parsed, but no remote Actions run occurred.
-- The latest focus-event test verifies persisted timestamp. SEC-OE-010 rate limit is configured as 10 requests/IP/minute; 429/window behavior remains untested.
+## CI and application
 
-## Requirements/documentation
+- `.github/workflows/ci.yml` runs on pushes and pull requests targeting `main`, uses Node 22, `npm ci`, `npm test`, and `npm run build`, and grants only `contents: read`.
+- Recent Actions runs on 29–30 October include successful PR and push runs, including the latest `main` run for PR #59. One earlier 29 October `main` push run failed; a subsequent run passed. The workflow is active and current latest success is verified, but the failed run's cause has not been documented here.
+- The application uses React/Vite, Express, MongoDB/Mongoose, and npm workspaces. Package scripts include `test`, `build`, `coverage`, and `check:a11y`. Source presence is not proof of complete workflows or SRS compliance.
+- The current checkout contains `SE miniproject.mp4` (17,745,589 bytes; MP4 metadata duration 74.63 seconds) and `Sprint2_Demo.mp4` (1,595,079 bytes; metadata duration 115.04 seconds). This is consistent with approximately one- and two-minute videos. Playback, upload/availability to the instructor, and whether each demonstrates the required product behavior have not yet been validated.
 
-- The submitted SRS contains 27 FR, 14 NFR and 12 SEC requirements (53 unique IDs). SRS remains primary. No requirement is marked fully complete based solely on partial code; see `SRS/RTM_Online_Exam_Portal.xlsx` > `Implementation Evidence`.
-- Test execution documents local implementation tests, not completion of the approved STP. Submitted SRS/SAD/STP and diagrams were preserved; SRS v1.2/SAD v1.4 related-document version mismatch and API/design conformance remain review items.
-- Official assignment requires a repository-linked GitHub Project, two official sprint dates (19–23 Oct and 26–30 Oct 2026), CI, and real Sprint 1/2 demo videos. A private repository-linked Project was created and verified in the authenticated browser session; its backlog is still empty.
+## Jira and schedule
 
-## GitHub/Jira status and blockers
+- No Jira connector is available in this session, so the current OEPSE-1 through OEPSE-29 records, story points, assignees, sprint membership, and mapping to GitHub items could not be refreshed. Prior Jira figures in handover documents are historical only, not current status.
+- Sprint 1 dates were 19–23 October 2026; Sprint 2 dates are 26–30 October 2026. Today is the final scheduled Sprint 2 day. No sprint completion is inferred from issue closures or current date.
+- Do not fabricate team contributions, PR reviews, sprint outcomes, or demo evidence. Record actual status and deviations after tracker and product review.
 
-- GitHub auth and read access were verified earlier against the existing remote; the existing repo was cloned with history. No code was pushed. The currently connected GitHub API connector is scoped to a different account: no repositories are returned for `chhavi2308-s`, and an unrelated repository is visible under another owner. The browser login is the correct account; the connector must be re-authorized before API work. A private repository-linked Project exists at `https://github.com/users/chhavi2308-s/projects/1` (main view: `/views/1`). The repository Projects tab confirms the association. Status values, P0–P3, Story Points, Sprint periods, five Epic values, project description and README are configured. No issues were created/imported; the project has zero additional members. No collaborator access was changed.
-- The user confirmed `https://chhavis0823.atlassian.net` is the intended team destination. Read-only searches for `OEP` and `Online Exam Portal` returned no visible project. The Jira Software role and `org-admins` group are present, but the integration has no Jira Software project-create operation or direct global-permission check. `OEP` availability is not globally proven. No Jira writes were made; manual creation steps are in `docs/TEAM_HANDOVER.md`.
-- Draft planning files remain at workspace `outputs/jira-planning-proposal.md` and `outputs/jira-backlog-draft.csv`. Verified totals: 5 epics, 23 stories, 1 task, 108 provisional points; Sprint 1 33, Sprint 2 45, backlog 30. FR-OE-024, NFR-OE-004, and NFR-OE-009 remain Must items outside the proposed sprints.
-- Team 6 names are Chhavi Siddarth Wadhwa, Dhanya S Prasad, Gagan P, and Harsha K. Chhavi is the confirmed Team Lead/Product Owner. Other individual assignments and tracker identities remain unconfirmed.
+## Assigned issue work continued locally
 
-## Risks and next work
+- Issues #1 and #3 are currently assigned to `chhavi2308-s`; both remain open.
+- Local, unmerged work for #3 adds administrator user listing, creation, profile/role/password updates, activation/deactivation, CSRF and role guards, session revocation, a management panel, and an audit-log view. Email changes are read-only until a verified email-change flow exists.
+- Local, unmerged work for #1 adds student registration, hashed 24-hour email-verification tokens, one-time hashed 30-minute password-reset tokens, rate limiting, configurable SMTP delivery, and account forms. Tests use an injected mail transport; real SMTP delivery has not been verified.
+- The Mongo-backed integration files could not run locally because MongoDB Memory Server requested an uncached 781 MB Windows binary. Server syntax checks pass. Client unit tests pass 17/17 and the Vite production build passes. Full server tests and workspace CI remain to be verified by GitHub Actions.
+- Neither issue is ready to close until the PR is reviewed and merged and required evidence is complete. Issue #1 needs SMTP delivery validation; issue #3 needs remaining audit-event/retention review.
 
-1. Review the private repository-linked Project and decide whether to add teammates; its metadata is configured but no backlog work items exist yet.
-2. Confirm the intended Jira site and obtain a verifiable Jira project creation path/permission before making Jira items.
-3. Rerun `npm ci` after ensuring no process holds the native Rolldown file; rerun tests/build afterward.
-4. Team review of estimates and Must backlog; implement remaining prioritized requirements and expand test coverage.
-5. Confirm user/team task allocation; record actual demo videos; do not claim full SRS completion until evidence supports it.
+## Remaining verification
+
+1. Open the organization project board and verify its linked repository, item count, estimates, priorities, views, sprint periods, assignees, and visibility.
+2. Reconcile each Jira item with existing GitHub issues and SRS IDs; preserve existing Jira structure and do not duplicate issues.
+3. Confirm all team logins and effective repository/project access before making assignments or changing permissions.
+4. Verify full server integration tests and workspace build in GitHub Actions; validate SMTP delivery and expiry links in a controlled environment; review the admin workflows in a browser with disposable data.
+5. Validate both MP4 durations and content; record additional evidence only if actual behavior can be demonstrated.
+6. Cross-check Part 1/Part 2 requirements against the submitted PDFs, which are not present in this workspace.
