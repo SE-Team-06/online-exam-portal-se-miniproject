@@ -1,5 +1,9 @@
 # Implementation and requirement gap register
 
+## Local continuation — 30 October 2026
+
+Work on assigned issue #3 added administrator account list/create/update/activate/deactivate routes, a client account-management panel, and an audit-log view with action, user, and date filters. Issue #1 work adds student registration, one-time email verification and password reset, plus corresponding forms. Role and CSRF guards apply server-side; password/role changes and deactivation revoke sessions. Email change is read-only until a verified email-change flow exists. These changes are local and unmerged. Server syntax checks pass; client tests pass 17/17 and the production build passes. Mongo-backed integration tests could not run because MongoDB Memory Server attempted to download an uncached 781 MB Windows binary. SMTP delivery was not tested against a real mail server. Do not treat these items as verified or accepted until CI, review, merge, and remaining manual evidence are complete.
+
 Assessment date: 25 October 2026. Source of requirement IDs: submitted SRS v1.2 and `SRS/ID_Cheat_Sheet.md`. GitHub status is browser-verified; local `origin/main` could not be refreshed. This register describes the MVP slice only. A partial implementation is not acceptance of the complete SRS requirement.
 
 ## Evidence reviewed

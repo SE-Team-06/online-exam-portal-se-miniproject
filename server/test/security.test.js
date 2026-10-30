@@ -42,9 +42,12 @@ const PROTECTED_ROUTES = [
   ['get', `/api/attempts/${DUMMY_ID}/result`, ANY],
   ['get', `/api/attempts/${DUMMY_ID}/review`, STUDENT],
   ['delete', `/api/admin/users/${DUMMY_ID}/data`, ADMIN],
+  ['get', '/api/admin/users', ADMIN],
+  ['post', '/api/admin/users', ADMIN],
+  ['patch', `/api/admin/users/${DUMMY_ID}`, ADMIN],
   ['get', '/api/admin/audit-logs', ADMIN],
 ];
-const PUBLIC_ROUTES = ['GET /api/health', 'POST /api/auth/login', 'POST /api/auth/logout'];
+const PUBLIC_ROUTES = ['GET /api/health', 'POST /api/auth/login', 'POST /api/auth/logout', 'POST /api/auth/register', 'POST /api/auth/verify-email', 'POST /api/auth/password-reset', 'POST /api/auth/password-reset/complete'];
 
 let mongo; let loginAddress = 0;
 const sessions = {};

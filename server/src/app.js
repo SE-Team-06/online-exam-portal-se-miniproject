@@ -3,11 +3,12 @@ import mongoose from 'mongoose';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
-import { Attempt, AuditLog, Exam, Notification, Question, Session, User } from './models/index.js';
+import { Attempt, AuditLog, EmailActionToken, Exam, Notification, Question, Session, User } from './models/index.js';
 import { authenticate, requireCsrf, requireRole, sendError, writeAudit } from './middleware/auth.js';
-import { verifyPassword } from './security/password.js';
+import { hashPassword, passwordIsCompliant, verifyPassword } from './security/password.js';
 import { newOpaqueToken, hashToken, INACTIVITY_MS, sessionCookie } from './security/session.js';
 import { httpsRequired, requireHttps } from './security/transport.js';
+import { sendAccountActionEmail } from './security/email.js';
 import { calculateScore } from './domain/scoring.js';
 
 const app = express();
@@ -17,6 +18,7 @@ app.use(requireHttps);
 app.use(helmet());
 app.use(express.json({ limit: '32kb' }));
 const loginLimit = rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
+const authActionLimit = rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
 const FINALIZATION_LEASE_MS = 60_000;
 const bad = (res, issues) => sendError(res, 400, 'VALIDATION_ERROR', issues[0]?.message ?? 'Invalid request.');
 const asPublicUser = (user) => ({ id: user.id, name: user.name, email: user.email, role: user.role });
@@ -26,6 +28,83 @@ app.get('/api/health', async (_req, res) => {
   let database = 'down';
   try { if (mongoose.connection.readyState === 1) { await mongoose.connection.db.admin().ping(); database = 'up'; } } catch { database = 'down'; }
   res.status(database === 'up' ? 200 : 503).json({ status: database === 'up' ? 'ok' : 'degraded', database, time: new Date() });
+});
+const registrationInput = z.object({ name: z.string().trim().min(1).max(100), email: z.string().trim().email().max(254), password: z.string().min(8).max(128).refine(passwordIsCompliant, 'Password must contain upper-case, lower-case, and numeric characters.') });
+const tokenInput = z.object({ token: z.string().min(20).max(100) });
+const resetInput = z.object({ token: z.string().min(20).max(100), password: z.string().min(8).max(128).refine(passwordIsCompliant, 'Password must contain upper-case, lower-case, and numeric characters.') });
+async function createEmailActionToken(userId, purpose, lifetimeMs) {
+  await EmailActionToken.deleteMany({ userId, purpose });
+  const token = newOpaqueToken();
+  await EmailActionToken.create({ tokenHash: hashToken(token), userId, purpose, expiresAt: new Date(Date.now() + lifetimeMs) });
+  return token;
+}
+function accountActionUrl(parameter, token) {
+  const url = new URL('/', process.env.APP_ORIGIN ?? 'http://localhost:5173');
+  url.searchParams.set(parameter, token);
+  return url.toString();
+}
+
+app.post('/api/auth/register', authActionLimit, async (req, res, next) => {
+  try {
+    const parsed = registrationInput.safeParse(req.body);
+    if (!parsed.success) return bad(res, parsed.error.issues);
+    const email = parsed.data.email.toLowerCase();
+    if (await User.exists({ email })) return sendError(res, 409, 'EMAIL_IN_USE', 'An account with that email already exists.');
+    const user = await User.create({ name: parsed.data.name, email, passwordHash: await hashPassword(parsed.data.password), role: 'Student', emailVerified: false, active: true });
+    const token = await createEmailActionToken(user._id, 'VERIFY_EMAIL', 24 * 60 * 60_000);
+    try {
+      await sendAccountActionEmail({ to: email, subject: 'Verify your Online Exam Portal account', text: `Verify your email within 24 hours: ${accountActionUrl('verifyEmail', token)}` });
+    } catch {
+      await Promise.all([EmailActionToken.deleteMany({ userId: user._id, purpose: 'VERIFY_EMAIL' }), user.deleteOne()]);
+      return sendError(res, 503, 'EMAIL_UNAVAILABLE', 'Registration email could not be sent. Please try again later.');
+    }
+    await AuditLog.create({ action: 'ACCOUNT_REGISTERED', userId: user._id, ip: req.ip });
+    res.status(202).json({ message: 'Registration received. Check your email for a verification link valid for 24 hours.' });
+  } catch (error) { if (error.code === 11000) return sendError(res, 409, 'EMAIL_IN_USE', 'An account with that email already exists.'); next(error); }
+});
+app.post('/api/auth/verify-email', authActionLimit, async (req, res, next) => {
+  try {
+    const parsed = tokenInput.safeParse(req.body);
+    if (!parsed.success) return bad(res, parsed.error.issues);
+    const action = await EmailActionToken.findOneAndDelete({ tokenHash: hashToken(parsed.data.token), purpose: 'VERIFY_EMAIL', expiresAt: { $gt: new Date() } });
+    if (!action) return sendError(res, 400, 'INVALID_OR_EXPIRED_TOKEN', 'This verification link is invalid, expired, or already used.');
+    const user = await User.findById(action.userId);
+    if (!user || !user.active) return sendError(res, 400, 'INVALID_OR_EXPIRED_TOKEN', 'This verification link is invalid, expired, or already used.');
+    user.emailVerified = true; await user.save();
+    await AuditLog.create({ action: 'EMAIL_VERIFIED', userId: user._id, ip: req.ip });
+    res.json({ message: 'Email verified. You can now sign in.' });
+  } catch (error) { next(error); }
+});
+app.post('/api/auth/password-reset', authActionLimit, async (req, res, next) => {
+  try {
+    const parsed = z.object({ email: z.string().trim().email().max(254) }).safeParse(req.body);
+    if (!parsed.success) return bad(res, parsed.error.issues);
+    const user = await User.findOne({ email: parsed.data.email.toLowerCase(), active: true, emailVerified: true });
+    let delivery;
+    if (user) {
+      const token = await createEmailActionToken(user._id, 'RESET_PASSWORD', 30 * 60_000);
+      delivery = sendAccountActionEmail({ to: user.email, subject: 'Reset your Online Exam Portal password', text: `Reset your password within 30 minutes: ${accountActionUrl('resetPassword', token)}` });
+    }
+    res.status(202).json({ message: 'If an active verified account matches that address, password reset instructions have been sent.' });
+    if (delivery) {
+      try { await delivery; }
+      catch { await EmailActionToken.deleteMany({ userId: user._id, purpose: 'RESET_PASSWORD' }); }
+    }
+  } catch (error) { next(error); }
+});
+app.post('/api/auth/password-reset/complete', authActionLimit, async (req, res, next) => {
+  try {
+    const parsed = resetInput.safeParse(req.body);
+    if (!parsed.success) return bad(res, parsed.error.issues);
+    const action = await EmailActionToken.findOneAndDelete({ tokenHash: hashToken(parsed.data.token), purpose: 'RESET_PASSWORD', expiresAt: { $gt: new Date() } });
+    if (!action) return sendError(res, 400, 'INVALID_OR_EXPIRED_TOKEN', 'This reset link is invalid, expired, or already used.');
+    const user = await User.findById(action.userId);
+    if (!user || !user.active || !user.emailVerified) return sendError(res, 400, 'INVALID_OR_EXPIRED_TOKEN', 'This reset link is invalid, expired, or already used.');
+    user.passwordHash = await hashPassword(parsed.data.password); user.failedLogins = 0; user.lockedUntil = null; await user.save();
+    await Promise.all([Session.deleteMany({ userId: user._id }), EmailActionToken.deleteMany({ userId: user._id, purpose: 'RESET_PASSWORD' })]);
+    await AuditLog.create({ action: 'PASSWORD_RESET', userId: user._id, ip: req.ip });
+    res.json({ message: 'Password reset. Sign in with your new password.' });
+  } catch (error) { next(error); }
 });
 app.post('/api/auth/login', loginLimit, async (req, res, next) => {
   try {
@@ -55,6 +134,66 @@ app.post('/api/auth/logout', authenticate, requireCsrf, async (req, res, next) =
   try { await req.sessionRecord.deleteOne(); await writeAudit(req, 'LOGOUT'); res.setHeader('Set-Cookie', sessionCookie('', { clear: true, secure: httpsRequired() })); res.status(204).end(); } catch (e) { next(e); }
 });
 app.get('/api/auth/me', authenticate, (req, res) => res.json({ user: asPublicUser(req.user), csrfToken: req.sessionRecord.csrfToken }));
+
+const adminUserInput = z.object({
+  name: z.string().trim().min(1).max(100),
+  email: z.string().trim().email().max(254),
+  password: z.string().min(8).max(128).refine(passwordIsCompliant, 'Password must contain upper-case, lower-case, and numeric characters.'),
+  role: z.enum(['Student', 'Instructor', 'Administrator']),
+});
+const adminUserPatch = z.object({
+  name: z.string().trim().min(1).max(100).optional(),
+  password: z.string().min(8).max(128).refine(passwordIsCompliant, 'Password must contain upper-case, lower-case, and numeric characters.').optional(),
+  role: z.enum(['Student', 'Instructor', 'Administrator']).optional(),
+  active: z.boolean().optional(),
+}).refine((value) => Object.keys(value).length > 0, 'Provide at least one account field to change.');
+const adminUserView = (user) => ({ id: user.id, name: user.name, email: user.email, role: user.role, active: user.active, emailVerified: user.emailVerified, createdAt: user.createdAt, updatedAt: user.updatedAt });
+
+app.get('/api/admin/users', authenticate, requireRole('Administrator'), async (req, res, next) => {
+  try {
+    const users = await User.find({}).sort({ name: 1, _id: 1 }).limit(500);
+    res.json({ users: users.map(adminUserView) });
+  } catch (e) { next(e); }
+});
+app.post('/api/admin/users', authenticate, requireRole('Administrator'), requireCsrf, async (req, res, next) => {
+  try {
+    const parsed = adminUserInput.safeParse(req.body);
+    if (!parsed.success) return bad(res, parsed.error.issues);
+    const data = parsed.data;
+    const email = data.email.toLowerCase();
+    if (await User.exists({ email })) return sendError(res, 409, 'EMAIL_IN_USE', 'An account with that email already exists.');
+    const user = await User.create({ name: data.name, email, passwordHash: await hashPassword(data.password), role: data.role, emailVerified: true, active: true });
+    await writeAudit(req, 'USER_CREATED', { targetUserId: String(user._id), role: user.role });
+    res.status(201).json({ user: adminUserView(user) });
+  } catch (e) { next(e); }
+});
+app.patch('/api/admin/users/:userId', authenticate, requireRole('Administrator'), requireCsrf, async (req, res, next) => {
+  try {
+    if (!objectId.safeParse(req.params.userId).success) return sendError(res, 400, 'INVALID_ID', 'Invalid user identifier.');
+    const parsed = adminUserPatch.safeParse(req.body);
+    if (!parsed.success) return bad(res, parsed.error.issues);
+    const user = await User.findById(req.params.userId);
+    if (!user) return sendError(res, 404, 'USER_NOT_FOUND', 'User not found.');
+    const updates = parsed.data;
+    const isSelf = String(user._id) === String(req.user._id);
+    if (isSelf && (updates.active === false || (updates.role && updates.role !== 'Administrator'))) {
+      return sendError(res, 409, 'SELF_DEMOTION_FORBIDDEN', 'Administrators cannot deactivate or demote their own account.');
+    }
+    const wasAdmin = user.role === 'Administrator' && user.active;
+    const willBeAdmin = (updates.role ?? user.role) === 'Administrator' && (updates.active ?? user.active);
+    if (wasAdmin && !willBeAdmin && await User.countDocuments({ role: 'Administrator', active: true }) <= 1) {
+      return sendError(res, 409, 'LAST_ADMIN', 'At least one active administrator account must remain.');
+    }
+    for (const [key, value] of Object.entries(updates)) {
+      if (key === 'password') user.passwordHash = await hashPassword(value);
+      else user[key] = value;
+    }
+    await user.save();
+    if (updates.active === false || updates.role || updates.password) await Session.deleteMany({ userId: user._id });
+    await writeAudit(req, 'USER_UPDATED', { targetUserId: String(user._id), changedFields: Object.keys(updates).filter((key) => key !== 'password') });
+    res.json({ user: adminUserView(user) });
+  } catch (e) { next(e); }
+});
 app.get('/api/notifications', authenticate, async (req, res, next) => {
   try {
     const notifications = await Notification.find({ recipientId: req.user._id }).sort({ createdAt: -1 }).limit(50);

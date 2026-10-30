@@ -91,6 +91,13 @@ auditLogSchema.index(
 auditLogSchema.index({ action: 1, timestamp: -1 });
 auditLogSchema.index({ userId: 1, timestamp: -1 });
 
+const emailActionTokenSchema = new Schema({
+  tokenHash: { type: String, required: true, unique: true },
+  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  purpose: { type: String, enum: ['VERIFY_EMAIL', 'RESET_PASSWORD'], required: true },
+  expiresAt: { type: Date, required: true, index: { expires: 0 } },
+}, { timestamps: true, versionKey: false });
+
 const notificationSchema = new Schema({
   recipientId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   type: { type: String, enum: ['EXAM_ASSIGNED', 'RESULT_RELEASED'], required: true },
@@ -108,3 +115,4 @@ export const Exam = model('Exam', examSchema);
 export const Attempt = model('Attempt', attemptSchema);
 export const AuditLog = model('AuditLog', auditLogSchema);
 export const Notification = model('Notification', notificationSchema);
+export const EmailActionToken = model('EmailActionToken', emailActionTokenSchema);
