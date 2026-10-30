@@ -14,6 +14,10 @@ npm.cmd run dev
 
 The API starts on `http://localhost:4000`; Vite serves the web app on `http://localhost:5173`. The API requires `MONGODB_URI`. The `.env` file is ignored by Git. Do not put credentials, real student data, or exam answers in the repository.
 
+## Linux deployment
+
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for reproducible Linux server steps, required services, environment variables, and a reverse-proxy setup. The documented deployment targets a standard Linux server with Node.js and MongoDB; the project does not currently include a Docker image or Compose file.
+
 ## Temporary demo (no persistent database required)
 
 ```powershell
@@ -29,6 +33,7 @@ For the instructor demo, sign in as `instructor@example.test` using the password
 
 ```powershell
 npm.cmd test
+npm.cmd run coverage
 npm.cmd run build
 ```
 
