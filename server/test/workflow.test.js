@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import mongoose from 'mongoose';
 import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server-core';
+import { fileURLToPath } from 'node:url';
 import app, { submitExpiredAttempts } from '../src/app.js';
 import { User, Question, Exam, Attempt, AuditLog } from '../src/models/index.js';
 import { hashPassword, verifyPassword } from '../src/security/password.js';
@@ -16,7 +17,7 @@ const examPayload = (overrides = {}) => ({
   ...overrides,
 });
 before(async () => {
-  process.env.MONGOMS_DOWNLOAD_DIR ??= new URL('../../.cache/mongodb-binaries', import.meta.url).pathname.replace(/^\//, '').replaceAll('/', '\\');
+  process.env.MONGOMS_DOWNLOAD_DIR ??= fileURLToPath(new URL('../../.cache/mongodb-binaries', import.meta.url));
   mongo = await MongoMemoryServer.create(); await mongoose.connect(mongo.getUri());
   const passwordHash = await hashPassword('TestPass123');
   [instructor, student, stranger, otherInstructor] = await Promise.all([
