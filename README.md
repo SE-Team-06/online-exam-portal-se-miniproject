@@ -34,6 +34,8 @@ npm.cmd run build
 
 The latest local execution record is in [`docs/test-execution.md`](docs/test-execution.md). Automated test/build success verifies this implementation snapshot, not full SRS or browser acceptance.
 
+Administrator audit review and repeatable scale measurements are documented in [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
+
 ## Troubleshooting
 
 - If the persistent API cannot connect, confirm MongoDB is running and that `MONGODB_URI` in your local `.env` points to it.
