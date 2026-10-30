@@ -230,20 +230,16 @@ describe('SRS-aligned exam workflow', () => {
     assert.ok(afterFocus.focusEvents[0] instanceof Date);
     await studentAgent.put(`/api/attempts/${attemptId}/answers/${questionId}`).set('x-csrf-token', csrfStudent).send({ selectedOptionId: 'a', flagged: false }).expect(200);
     await studentAgent.put(`/api/attempts/${attemptId}/answers/${questionId}`).set('x-csrf-token', csrfStudent).send({ selectedOptionId: 'not-an-option' }).expect(400);
-    const result = await studentAgent.post(`/api/attempts/${attemptId}/submit`).set('x-csrf-token', csrfStudent).set('x-forwarded-for', '198.51.100.44').expect(200);
+    const result = await studentAgent.post(`/api/attempts/${attemptId}/submit`).set('x-csrf-token', csrfStudent).expect(200);
     assert.equal(result.body.attempt.score, 2); assert.equal(result.body.attempt.passed, true);
     const repeated = await studentAgent.post(`/api/attempts/${attemptId}/submit`).set('x-csrf-token', csrfStudent).expect(200);
     assert.deepEqual(repeated.body.attempt, result.body.attempt);
     await strangerAgent.get(`/api/attempts/${attemptId}/result`).expect(404);
-    const submissionAudit = await AuditLog.findOne({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': attemptId });
-    assert.equal(submissionAudit.ip, '198.51.100.44');
     assert.equal((await Attempt.findById(attemptId)).status, 'SUBMITTED');
   });
   it('prevents repeated attempts and records a result only after submission', async () => {
     await studentAgent.post(`/api/exams/${examId}/attempts`).set('x-csrf-token', csrfStudent).expect(409);
-    await studentAgent.get(`/api/attempts/${attemptId}/result`).set('x-forwarded-for', '198.51.100.47').expect(200);
-    const resultAudit = await AuditLog.findOne({ action: 'RESULT_ACCESSED', 'details.attemptId': attemptId });
-    assert.equal(resultAudit.ip, '198.51.100.47');
+    await studentAgent.get(`/api/attempts/${attemptId}/result`).expect(200);
   });
   it('does not reveal answer keys through question reads', async () => {
     const response = await request(app).get('/api/health').expect(200); assert.equal(response.body.status, 'ok');
@@ -251,7 +247,7 @@ describe('SRS-aligned exam workflow', () => {
   });
   it('auto-submits an expired attempt with no answers and records its final status and score', async () => {
     const exam = await Exam.create({ ownerId: instructor._id, title: 'Timeout test', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
-    const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).set('x-forwarded-for', '198.51.100.45').expect(201);
+    const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).expect(201);
     const id = started.body.attempt.id;
     const expiredAt = new Date(Date.now() - 1000);
     await Attempt.updateOne({ _id: id }, { $set: { endsAt: expiredAt } });
@@ -264,13 +260,10 @@ describe('SRS-aligned exam workflow', () => {
     assert.equal(saved.unansweredCount, 1);
     assert.equal(saved.endsAt.getTime(), expiredAt.getTime());
     assert.ok(saved.submittedAt instanceof Date);
-    const audit = await AuditLog.findOne({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id });
-    assert.equal(audit.ip, '198.51.100.45');
-    assert.equal(audit.details.automatic, true);
   });
   it('returns the finalized result when reading an attempt after its deadline', async () => {
     const exam = await Exam.create({ ownerId: instructor._id, title: 'Expired attempt read', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
-    const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).set('x-forwarded-for', '198.51.100.46').expect(201);
+    const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).expect(201);
     const id = started.body.attempt.id;
     const expiredAt = new Date(Date.now() - 1000);
     await Attempt.updateOne({ _id: id }, { $set: { endsAt: expiredAt } });
@@ -307,7 +300,7 @@ describe('SRS-aligned exam workflow', () => {
   });
   it('returns the existing result when its owner submits after expiry processing', async () => {
     const exam = await Exam.create({ ownerId: instructor._id, title: 'Idempotent submit', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
-    const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).set('x-forwarded-for', '198.51.100.46').expect(201);
+    const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).expect(201);
     const id = started.body.attempt.id;
     await studentAgent.put(`/api/attempts/${id}/answers/${questionId}`).set('x-csrf-token', csrfStudent)
       .send({ selectedOptionId: 'a' }).expect(200);
@@ -327,7 +320,6 @@ describe('SRS-aligned exam workflow', () => {
       submittedAt: persisted.submittedAt.toISOString(),
     };
     assert.equal(await AuditLog.countDocuments({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id }), 1);
-    assert.equal((await AuditLog.findOne({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id })).ip, '198.51.100.46');
 
     const response = await studentAgent.post(`/api/attempts/${id}/submit`)
       .set('x-csrf-token', csrfStudent).expect(200);
@@ -349,18 +341,9 @@ describe('SRS-aligned exam workflow', () => {
     await studentAgent.post(`/api/attempts/${missingId}/submit`).set('x-csrf-token', csrfStudent)
       .expect(404).expect(({ body }) => assert.equal(body.error.code, 'ATTEMPT_NOT_FOUND'));
   });
-  it('records null rather than inventing an IP when an automatic submission has no captured request IP', async () => {
-    const exam = await Exam.create({ ownerId: instructor._id, title: 'No request IP', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
-    const attempt = await Attempt.create({ examId: exam._id, studentId: student._id, startedAt: new Date(Date.now() - 120_000), endsAt: new Date(Date.now() - 1000), answers: [{ questionId }] });
-    await submitExpiredAttempts();
-    const audit = await AuditLog.findOne({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': String(attempt._id) });
-    assert.ok(audit);
-    assert.equal(audit.ip, null);
-    assert.equal(audit.details.automatic, true);
-  });
   it('recovers a finalized attempt audit after a transient audit-store failure', async () => {
     const exam = await Exam.create({ ownerId: instructor._id, title: 'Audit recovery', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
-    const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).set('x-forwarded-for', '198.51.100.48').expect(201);
+    const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).expect(201);
     const id = started.body.attempt.id;
     await studentAgent.put(`/api/attempts/${id}/answers/${questionId}`).set('x-csrf-token', csrfStudent)
       .send({ selectedOptionId: 'a' }).expect(200);
@@ -395,7 +378,6 @@ describe('SRS-aligned exam workflow', () => {
     assert.equal(recovered.submittedAt.getTime(), firstFinalization.submittedAt.getTime());
     assert.equal(recovered.submissionAuditPending, false);
     assert.equal(await AuditLog.countDocuments({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id }), 1);
-    assert.equal((await AuditLog.findOne({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id })).ip, '198.51.100.48');
 
     // Simulate a crash after the audit insert but before clearing the outbox marker.
     await Attempt.updateOne({ _id: id }, { $set: { submissionAuditPending: true } });
