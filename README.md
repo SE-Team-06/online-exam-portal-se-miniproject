@@ -12,7 +12,7 @@ npm.cmd ci
 npm.cmd run dev
 ```
 
-The API starts on `http://localhost:4000`; Vite serves the web app on `http://localhost:5173`. The API requires `MONGODB_URI`. Registration and password reset send mail through `SMTP_URL` and `MAIL_FROM`; configure these values in `.env` to test those flows. Without SMTP configuration, registration cannot send a verification link and password-reset requests do not send mail. The `.env` file is ignored by Git. Do not put credentials, real student data, or exam answers in the repository.
+The API starts on `http://localhost:4000` bound to loopback by default; Vite serves the web app on `http://localhost:5173`. The API requires `MONGODB_URI`. Registration and password reset send mail through `SMTP_URL` and `MAIL_FROM`; use implicit TLS (`smtps://`) or STARTTLS (`smtp://`, enforced by the mail transport), and set `APP_ORIGIN` to the correct application origin. Without SMTP configuration, registration cannot send a verification link and password-reset requests do not send mail. The `.env` file is ignored by Git. Do not put credentials, real student data, or exam answers in the repository.
 
 ## Linux deployment
 
@@ -55,11 +55,11 @@ Integration tests use a temporary MongoDB process. Its first run may need networ
 
 ## Current implementation boundary
 
-Implemented in the fetched starter: login for verified accounts; inactivity-expiring server sessions; role checks, CSRF and origin checks; instructor-owned MCQ management; exam creation/configuration; timed student attempts, saved answers, auto-submit and scoring; notifications; result statistics and CSV export; and filtered administrator audit-log API. On the current local branch, unmerged changes also add student registration with email verification, one-time password-reset links, and administrator account management. Client unit tests and build pass locally; Mongo-backed server integration tests, real SMTP delivery, and pull-request review remain pending.
+The current `main` includes student registration, email verification, password reset, administrator account management, and administrator audit review alongside the exam workflows. Account-action tokens are stored as hashes, single-use and time-limited. Audit events cover authentication, exam publication, attempt submission, result access, and user changes. Production links require an explicit valid `APP_ORIGIN`; the API binds to loopback by default and trusts one reverse-proxy hop only under the documented private-network deployment model.
 
 The API also exposes recipient-scoped notifications at `/api/notifications`, instructor result statistics at `/api/instructor/results`, and CSV export at `/api/instructor/results.csv`. These endpoints require an authenticated session; notification read status requires the session CSRF token.
 
-Not yet implemented or fully verified: production SMTP delivery and review-environment testing of account links; complete audit event coverage and required retention evidence; exam deletion; a separate draft/publish lifecycle; question/option shuffling; complete timer/recovery acceptance (including refresh/retry tests); comprehensive accessibility/usability checks; performance/load targets; production deployment/TLS; operational backup/recovery; and complete alignment to every SRS/SAD requirement. The current local registration and administrator changes remain unreviewed and are not yet evidence of assignment acceptance. See `docs/implementation-gap-register.md`. This code must not be represented as meeting the full SRS.
+Not yet externally verified: real SMTP delivery and deployed account-link flows, production TLS/proxy configuration, operational retention/backup controls, and instructor/browser acceptance. Broader SRS gaps remain, including question/option shuffling, full timer/recovery acceptance, deployment-scale targets, accessibility/browser evidence, and complete alignment to every SRS/SAD requirement. See `docs/implementation-gap-register.md` and `docs/SPRINT2_ACCEPTANCE_STATUS.md`; passing tests do not mean the full SRS is implemented.
 
 ## Project collaboration
 

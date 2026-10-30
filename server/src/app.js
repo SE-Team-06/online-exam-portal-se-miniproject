@@ -46,7 +46,16 @@ async function createEmailActionToken(userId, purpose, lifetimeMs) {
   return token;
 }
 function accountActionUrl(parameter, token) {
-  const url = new URL('/', process.env.APP_ORIGIN ?? 'http://localhost:5173');
+  const configuredOrigin = process.env.APP_ORIGIN;
+  const httpsRequiredForEmail = process.env.NODE_ENV === 'production' || process.env.REQUIRE_HTTPS === 'true';
+  if (!configuredOrigin && httpsRequiredForEmail) throw new Error('APP_ORIGIN must be configured for production account email.');
+  const url = new URL(configuredOrigin ?? 'http://localhost:5173');
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password
+    || (url.pathname !== '/' && url.pathname !== '') || url.search || url.hash
+    || (httpsRequiredForEmail && url.protocol !== 'https:')) {
+    throw new Error('APP_ORIGIN must be a valid application origin.');
+  }
+  url.pathname = '/';
   url.searchParams.set(parameter, token);
   return url.toString();
 }
@@ -90,7 +99,12 @@ app.post('/api/auth/password-reset', authActionLimit, async (req, res, next) => 
     let delivery;
     if (user) {
       const token = await createEmailActionToken(user._id, 'RESET_PASSWORD', 30 * 60_000);
-      delivery = sendAccountActionEmail({ to: user.email, subject: 'Reset your Online Exam Portal password', text: `Reset your password within 30 minutes: ${accountActionUrl('resetPassword', token)}` });
+      try {
+        const url = accountActionUrl('resetPassword', token);
+        delivery = sendAccountActionEmail({ to: user.email, subject: 'Reset your Online Exam Portal password', text: `Reset your password within 30 minutes: ${url}` });
+      } catch {
+        await EmailActionToken.deleteMany({ userId: user._id, purpose: 'RESET_PASSWORD' });
+      }
     }
     res.status(202).json({ message: 'If an active verified account matches that address, password reset instructions have been sent.' });
     if (delivery) {
