@@ -103,4 +103,26 @@ describe('registration, verification, and password reset (FR-OE-001, FR-OE-002, 
     assert.ok((await Promise.all(tokens.map((token) => User.exists({ _id: token.userId })))).every(Boolean));
     setEmailTransport({ sendMail: async (message) => { sent.push(message); return { accepted: [message.to] }; } });
   });
+
+  it('fails closed for invalid production link origins without leaving usable tokens', async () => {
+    const previousOrigin = process.env.APP_ORIGIN;
+    const previousRequireHttps = process.env.REQUIRE_HTTPS;
+    process.env.APP_ORIGIN = 'http://portal.auth.test';
+    process.env.REQUIRE_HTTPS = 'true';
+    try {
+      await call(request(app).post('/api/auth/register')
+        .set('x-forwarded-proto', 'https')
+        .send({ name: 'Bad Origin', email: 'bad-origin@auth.test', password: 'StudentPass123' })).expect(503);
+      assert.equal(await User.exists({ email: 'bad-origin@auth.test' }), null);
+
+      const response = await call(request(app).post('/api/auth/password-reset')
+        .set('x-forwarded-proto', 'https')
+        .send({ email: 'existing@auth.test' })).expect(202);
+      assert.match(response.body.message, /If an active verified account matches/);
+      assert.equal(await EmailActionToken.exists({ purpose: 'RESET_PASSWORD' }), null);
+    } finally {
+      if (previousOrigin === undefined) delete process.env.APP_ORIGIN; else process.env.APP_ORIGIN = previousOrigin;
+      if (previousRequireHttps === undefined) delete process.env.REQUIRE_HTTPS; else process.env.REQUIRE_HTTPS = previousRequireHttps;
+    }
+  });
 });
