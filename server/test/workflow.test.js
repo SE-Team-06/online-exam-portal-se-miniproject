@@ -634,18 +634,17 @@ describe('SRS-aligned exam workflow', () => {
     }
   });
   it('returns 429 after ten login attempts from the same IP in one minute', async () => {
-    await withDirectRequestIp(async () => {
-      for (let i = 0; i < 10; i += 1) {
-        await request(app).post('/api/auth/login')
-          .set('x-forwarded-for', '192.0.2.99')
-          .send({ email: 'rate-limit@example.test', password: 'InvalidPass123' })
-          .expect(401);
-      }
+    // Simulate the configured trusted proxy so this test gets its own client IP.
+    for (let i = 0; i < 10; i += 1) {
       await request(app).post('/api/auth/login')
         .set('x-forwarded-for', '192.0.2.99')
         .send({ email: 'rate-limit@example.test', password: 'InvalidPass123' })
-        .expect(429);
-    });
+        .expect(401);
+    }
+    await request(app).post('/api/auth/login')
+      .set('x-forwarded-for', '192.0.2.99')
+      .send({ email: 'rate-limit@example.test', password: 'InvalidPass123' })
+      .expect(429);
   });
 });
 
