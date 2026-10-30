@@ -1,5 +1,17 @@
 # Online Exam Portal — Team Handover
 
+## Current state refresh — 30 October 2026
+
+- Canonical organization repository: `SE-Team-06/online-exam-portal-se-miniproject`. Current fetched `main` is `c124fec354ee91fe746cf989b32ae6b1f07bacd9` (PR #59 merged). The current changes are local on branch `feature/oepse-1-3-account-lifecycle`; no commit or push was made.
+- GitHub organization Projects listing shows **Online Exam Portal — Software Engineering** at `https://github.com/orgs/SE-Team-06/projects/1`. A fresh item-level board check was not completed, so linkage, backlog contents, views, fields, dates, and assignments still need confirmation.
+- GitHub Actions is configured for pushes and PRs to `main`, with `npm ci`, tests, and build. Recent runs include successful PR and push checks through the PR #59 merge. A 29 October failure also exists; inspect it before describing the workflow as consistently green.
+- The checkout contains `SE miniproject.mp4` (MP4 metadata 74.63 seconds) and `Sprint2_Demo.mp4` (115.04 seconds), consistent with approximately one- and two-minute durations. Playback and actual demonstrated behavior are not yet validated.
+- On this Windows environment, Node 24 is present but npm is absent from PATH. Running the npm CLI bundled into the official npm package reached `npm ci` but failed with `EPERM` creating the workspace symlink `node_modules/@online-exam-portal/server`; tests/build were not run on the refreshed commit. Do not weaken Windows security settings to work around this.
+- Continued assigned issues #1 and #3 locally on this branch: added registration/email verification/password reset routes, configurable SMTP delivery, account forms, administrator account lifecycle API/UI, audit viewing, and Mongo-backed tests. Server syntax checks pass; client tests pass 17/17 and its production build passes. Mongo-backed tests could not run because MongoDB Memory Server requested a 781 MB uncached binary. Real SMTP delivery also remains unverified. Both issues stay open pending GitHub Actions, review/merge, and required acceptance evidence.
+- The submitted assignment PDFs and template files were not available in this checkout. The existing SRS/SAD/STP and historical evidence remain authoritative pending a final cross-check against those PDFs. Jira could not be refreshed in this session; older Jira totals and sprint records are historical, not current.
+- Team member GitHub logins are visible in issue history, but effective access could not be verified. Do not make new assignments or permission changes based on inferred identities.
+- See [REPOSITORY_AUDIT.md](REPOSITORY_AUDIT.md) for a current evidence-based status and remaining verification.
+
 **As of:** 25 October 2026
 **Course:** Software Engineering (UE24CS341A), PES University
 **Team:** 6
