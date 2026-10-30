@@ -1,5 +1,15 @@
 # Local test execution record
 
+## Account lifecycle continuation — 30 October 2026
+
+- Branch: `feature/oepse-1-3-account-lifecycle`, based on fetched `origin/main` at `c124fec354ee91fe746cf989b32ae6b1f07bacd9`.
+- Server syntax checks passed for `server/src/app.js`, `server/src/models/index.js`, `server/src/security/email.js`, `server/test/admin-users.test.js`, and `server/test/auth-lifecycle.test.js`. The pure scoring suite passed 6/6.
+- Client tests passed **17/17** (`node --test test/*.test.js` in `client`). Vite production build passed (`node node_modules/vite/bin/vite.js build`).
+- The new Mongo-backed server integration tests were not completed: MongoDB Memory Server attempted to download MongoDB 8.2.6 for Windows (781 MB), and the binary was not cached. No test result is claimed for the new account lifecycle routes.
+- `npm ci --dry-run --ignore-scripts --no-audit --no-fund` passed and resolved the updated root lockfile, including the mail dependency. An actual root workspace install remains blocked by Windows symlink permissions.
+- Real SMTP delivery, link arrival, browser flow, and expiry against a configured deployment remain unverified. Tests use a fake mail transport only.
+- Root `npm ci` was attempted and failed with Windows `EPERM` creating the npm workspace symlink. Server/client dependencies were installed independently; the tracked root lockfile was not changed by those installs.
+
 ## Issue #18 single-scorer follow-up — 25 October 2026
 
 - Tested on `fix/issue-18-single-scorer`, based on the locally available `origin/main` commit `1f8eda1382dff7e277e61759b40ddbec65ac999e`. A fresh fetch was attempted but could not authenticate (`SEC_E_NO_CREDENTIALS`), so the remote ref may have advanced.
