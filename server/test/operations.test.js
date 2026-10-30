@@ -149,6 +149,11 @@ describe('administrator audit review (OEPSE-23)', () => {
     const studentCsrf = (await studentAgent.post('/api/auth/login').send({ email: student.email, password: 'StudentPass123' }).expect(200)).body.csrfToken;
     await studentAgent.get('/api/admin/audit-logs').expect(403);
     await studentAgent.get('/api/admin/audit-logs').set('x-csrf-token', studentCsrf).expect(403);
+
+    // Audit review is read-only through the application API, including for admins.
+    await admin.post('/api/admin/audit-logs').set('x-csrf-token', csrfAdmin).send({ action: 'FORGED' }).expect(404);
+    await admin.patch('/api/admin/audit-logs').set('x-csrf-token', csrfAdmin).send({ action: 'FORGED' }).expect(404);
+    await admin.delete('/api/admin/audit-logs').set('x-csrf-token', csrfAdmin).expect(404);
   });
 });
 

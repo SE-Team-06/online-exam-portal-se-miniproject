@@ -1,5 +1,13 @@
 # Local test execution record
 
+## Merged PR #63 baseline and final acceptance branch — 30 October 2026
+
+- Fetched `origin/main` at `2db1c9d83281601c99a81dd0b018ebe0ec2f5713`, the merge commit for PR #63. GitHub Actions run [41099637545](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/41099637545) is `success`: `npm ci` completed; server tests **168 passed, 0 failed, 0 skipped**; client tests **17 passed, 0 failed, 0 skipped**; `npm run build` passed, including server syntax checks and Vite production build.
+- The current final-pass branch is based on that commit and adds production application-origin validation, loopback-default API binding, direct-Supertest anti-spoof assertions for submission/result audit IPs, admin audit actor-field assertions, and negative checks for audit mutation routes. The Actions result above predates these changes and does not verify them.
+- On this branch, local client tests passed **17/17**, Vite production build passed, `node --check` passed for the changed server source and test files, and SMTP configuration tests passed **2/2**. The full server suite was attempted; MongoDB-backed tests could not initialize because the cached Windows archive computed MD5 `d16c23a3590abc8cb66e33e39692e75b` while its checksum file says `b794b99d839b73b3862972d2e170018f`. No integrity bypass was used; database-backed assertions are **BLOCKED**, not passed.
+- Run candidate changes on GitHub Actions after PR creation. Real SMTP delivery is unavailable because no staging SMTP service/configuration was supplied.
+- Root lockfile/dependencies were not changed. The green GitHub run provides the clean `npm ci` result for the merged baseline; a new branch run is still required for final acceptance.
+
 ## PR #63 CI follow-up — 30 October 2026
 
 - The failing Actions run reported `passwordHash is not defined` in the administrator test and two audit-IP assertions that expected values from caller-supplied `X-Forwarded-For` headers. The administrator test's setup variable was scoped to the `before` callback; the second synthetic administrator now receives a hash from the existing `hashPassword` helper.
