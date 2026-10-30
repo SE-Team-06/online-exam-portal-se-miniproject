@@ -1,5 +1,12 @@
 # Local test execution record
 
+## PR #63 CI follow-up — 30 October 2026
+
+- The failing Actions run reported `passwordHash is not defined` in the administrator test and two audit-IP assertions that expected values from caller-supplied `X-Forwarded-For` headers. The administrator test's setup variable was scoped to the `before` callback; the second synthetic administrator now receives a hash from the existing `hashPassword` helper.
+- The IP tests run over direct Supertest sockets, not through the application's configured one-hop reverse proxy. They now temporarily disable proxy trust for those test requests, include spoofed forwarding headers, assert those values are ignored, and compare the final submission audit IP to the same attempt's observed start-request audit IP. Production trust-proxy configuration and submission code are unchanged.
+- Submission remains idempotent, automatic finalization and audit retry retain the captured IP, and no captured IP remains `null`; only the incorrect test assumptions changed.
+- Verification on this Windows host: the client suite passed **17/17** and the client Vite production build passed. Server integration tests could not initialize MongoDB Memory Server because the downloaded archive failed its published MD5 check; no server pass is claimed. `node --check` and `git diff --check` passed for the changed files. The new PR-branch Actions result is pending because the branch push has not yet succeeded.
+
 ## Sprint 2 acceptance follow-up — 30 October 2026
 
 - Verified baseline: fetched `main` at PR #60 merge `4d599af441ab352829007a1d6a61e49dba068895`; work is on `fix/sprint2-account-acceptance-audit`.

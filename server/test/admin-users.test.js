@@ -79,7 +79,8 @@ describe('administrator account lifecycle (OEPSE-8)', () => {
     await admin.patch(`/api/admin/users/${selfId}`).set('x-csrf-token', csrfAdmin).send({ active: false }).expect(409);
     await admin.patch(`/api/admin/users/${selfId}`).set('x-csrf-token', csrfAdmin).send({ role: 'Student' }).expect(409);
 
-    const secondAdmin = await User.create({ name: 'Second Admin', email: 'second-admin@users.test', passwordHash, role: 'Administrator', emailVerified: true });
+    const secondAdminPasswordHash = await hashPassword('AdminPass123');
+    const secondAdmin = await User.create({ name: 'Second Admin', email: 'second-admin@users.test', passwordHash: secondAdminPasswordHash, role: 'Administrator', emailVerified: true });
     const secondAdminId = String(secondAdmin._id);
     await admin.patch(`/api/admin/users/${secondAdminId}`).set('x-csrf-token', csrfAdmin).send({ role: 'Instructor' }).expect(200);
     assert.deepEqual((await AuditLog.findOne({ action: 'USER_UPDATED', 'details.targetUserId': secondAdminId })).details.roleChange,
