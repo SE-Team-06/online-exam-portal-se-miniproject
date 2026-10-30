@@ -1,5 +1,15 @@
 # Local test execution record
 
+## Sprint 2 acceptance follow-up — 30 October 2026
+
+- Verified baseline: fetched `main` at PR #60 merge `4d599af441ab352829007a1d6a61e49dba068895`; work is on `fix/sprint2-account-acceptance-audit`.
+- `npm.cmd ci`: unavailable because `npm.cmd` is not on PATH. Root `npm ci` invoked with the available npm 12.2.1 CLI failed with Windows `EPERM` creating the npm workspace symlink. Server and client dependencies were installed independently with workspaces disabled; manifests and lockfile were unchanged.
+- `node --check` passed for the modified server source and tests. `node --test client/test/*.test.js`: **17 passed, 0 failed**. Vite production build passed from `client`.
+- Focused server integration command (`node --test --test-concurrency=1 test/auth-lifecycle.test.js test/admin-users.test.js test/operations.test.js test/workflow.test.js` from `server`) did not reach test assertions. MongoDB Memory Server downloaded an archive whose MD5 did not match its published checksum and refused startup. Treat all Mongo-backed acceptance cases as **unverified**, not passed. The integrity check was not bypassed.
+- `npm test` through the available npm CLI failed because its workspace script invokes the `npm` executable recursively, which is absent from PATH. `npm run build` was not runnable through the same script chain; equivalent server `node --check` checks and direct client Vite build passed.
+- No staging SMTP variables/service were configured; real email delivery is **BLOCKED**. No real delivery, credential, or account evidence is claimed.
+- `git diff --check` passed. No GitHub CI result exists yet for this follow-up branch.
+
 ## Account lifecycle continuation — 30 October 2026
 
 - Branch: `feature/oepse-1-3-account-lifecycle`, based on fetched `origin/main` at `c124fec354ee91fe746cf989b32ae6b1f07bacd9`.
