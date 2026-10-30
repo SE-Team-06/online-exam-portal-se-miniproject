@@ -1,5 +1,7 @@
 # Online Exam Portal — sprint review checklist
 
+> **Current refresh — 30 October 2026:** The canonical organization repository is at `c124fec` on `main` (PR #59 merged). The signed-in organization Projects listing now shows **Online Exam Portal — Software Engineering** at `https://github.com/orgs/SE-Team-06/projects/1`; item-level board contents were not readable in this audit. The repository contains `SE miniproject.mp4` (MP4 metadata 74.63 seconds) and `Sprint2_Demo.mp4` (115.04 seconds), consistent with the approximate one- and two-minute lengths. Playback and demonstrated behaviors have not been validated, so review them before presenting as evidence. Current local `npm ci` could not complete because Windows denied creation of the npm workspace symlink (`EPERM`); tests/build were therefore not run on this refreshed revision. See [REPOSITORY_AUDIT.md](REPOSITORY_AUDIT.md) for the evidence boundary.
+
 **Updated:** 25 October 2026
 **Repository:** [SE-Team-06/online-exam-portal-se-miniproject](https://github.com/SE-Team-06/online-exam-portal-se-miniproject)
 **Evidence scope:** local automated checks and authenticated GitHub browser readback. No fresh product browser walkthrough or video recording was made in this audit.
