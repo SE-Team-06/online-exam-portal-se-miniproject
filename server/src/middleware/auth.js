@@ -1,7 +1,6 @@
 import { AuditLog, Session, User } from '../models/index.js';
 import { COOKIE_NAME, hashToken, readCookie, sessionCookie, tokensMatch, INACTIVITY_MS } from '../security/session.js';
 import { httpsRequired } from '../security/transport.js';
-import { isIP } from 'node:net';
 
 export function sendError(res, status, code, message) {
   return res.status(status).json({ error: { code, message } });
@@ -60,6 +59,5 @@ export function requireCsrf(req, res, next) {
 }
 
 export async function writeAudit(req, action, details = {}) {
-  const ip = typeof req.ip === 'string' && isIP(req.ip) ? req.ip : null;
-  await AuditLog.create({ action, userId: req.user?._id ?? null, ip, details });
+  await AuditLog.create({ action, userId: req.user?._id ?? null, ip: req.ip ?? null, details });
 }
