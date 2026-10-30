@@ -11,6 +11,8 @@
     "backup": "node src/ops/cli.js backup",
     "restore": "node src/ops/cli.js restore",
     "availability": "node src/ops/cli.js availability"
+    ,"scale:load": "node src/ops/scale.js load"
+    ,"scale:storage": "node src/ops/scale.js storage"
   },
   "dependencies": {
     "bcryptjs": "3.0.3",
