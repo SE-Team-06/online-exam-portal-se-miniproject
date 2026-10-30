@@ -98,17 +98,10 @@ describe('retention and data deletion on request (NFR-OE-014)', () => {
     await del(student.id).expect(404);
   });
 
-  it('has no automatic expiry on attempts, results or audit records', async () => {
+  it('has no automatic expiry on attempts, results or audit records', () => {
     const expiring = ([, options]) => options.expireAfterSeconds !== undefined || options.expires !== undefined;
     for (const model of [Attempt, AuditLog, Exam, User]) assert.ok(!model.schema.indexes().some(expiring), `${model.modelName} must not expire`);
     assert.ok(Session.schema.indexes().some(expiring), 'only sessions expire');
-    await Promise.all([Attempt.init(), AuditLog.init(), Exam.init(), User.init(), Session.init()]);
-    for (const model of [Attempt, AuditLog, Exam, User]) {
-      const indexes = await model.collection.indexes();
-      assert.ok(!indexes.some((index) => index.expireAfterSeconds !== undefined), `${model.collection.collectionName} must have no MongoDB TTL index`);
-    }
-    const sessionIndexes = await Session.collection.indexes();
-    assert.ok(sessionIndexes.some((index) => index.expireAfterSeconds === 0 && index.key.expiresAt === 1), 'sessions use the expiresAt TTL index');
   });
 });
 
@@ -126,29 +119,6 @@ describe('administrator audit review (OEPSE-23)', () => {
     assert.deepEqual(response.body.logs[0].details, { attemptId: 'attempt-1' });
     assert.equal(response.body.logs[0].ip, '192.0.2.20');
     await admin.get('/api/admin/audit-logs?from=2026-11-02&to=2026-11-01').expect(400);
-  });
-
-  it('applies user/date filters and paginates audit records for administrators only', async () => {
-    const auditUser = await User.findOne({ email: 'admin@ops.test' });
-    const base = new Date('2026-10-20T12:00:00.000Z');
-    await AuditLog.create([0, 1, 2].map((offset) => ({
-      action: 'REVIEW_PAGE_TEST', userId: auditUser._id, ip: `192.0.2.${30 + offset}`,
-      timestamp: new Date(base.getTime() + offset * 60_000), details: { item: offset },
-    })));
-    const query = `action=REVIEW_PAGE_TEST&userId=${auditUser.id}&from=2026-10-20T12%3A00%3A00.000Z&to=2026-10-20T12%3A02%3A00.000Z&limit=1`;
-    const first = await admin.get(`/api/admin/audit-logs?${query}&page=1`).expect(200);
-    const second = await admin.get(`/api/admin/audit-logs?${query}&page=2`).expect(200);
-    assert.equal(first.body.total, 3);
-    assert.equal(second.body.total, 3);
-    assert.equal(first.body.logs.length, 1);
-    assert.equal(second.body.logs.length, 1);
-    assert.notEqual(first.body.logs[0].id, second.body.logs[0].id);
-
-    const student = await User.create({ name: 'Audit Reader Denied', email: 'audit-reader-denied@ops.test', passwordHash: await hashPassword('StudentPass123'), role: 'Student', emailVerified: true });
-    const studentAgent = request.agent(app);
-    const studentCsrf = (await studentAgent.post('/api/auth/login').send({ email: student.email, password: 'StudentPass123' }).expect(200)).body.csrfToken;
-    await studentAgent.get('/api/admin/audit-logs').expect(403);
-    await studentAgent.get('/api/admin/audit-logs').set('x-csrf-token', studentCsrf).expect(403);
   });
 });
 

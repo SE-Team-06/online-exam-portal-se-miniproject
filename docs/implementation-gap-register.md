@@ -1,8 +1,8 @@
 # Implementation and requirement gap register
 
-## Sprint 2 closure readiness — 30 October 2026
+## Local continuation — 30 October 2026
 
-PR #60 is verified merged into canonical `main` at `4d599af`. On `fix/sprint2-account-acceptance-audit`, issue #3 receives request-IP persistence for manual/automatic submission and recovery, result-access audit events, validated IP audit writes, role-change audit details, and an actual MongoDB TTL-index test. Automated coverage was added for those paths. Local syntax checks pass; client tests pass 17/17 and client production build passes. Focused server suites failed before test execution because MongoDB Memory Server rejected its downloaded archive's MD5. Root `npm ci` hit Windows workspace symlink `EPERM`. SMTP delivery remains **BLOCKED** without a staging service; synthetic transport is not external evidence. These issues remain open until CI, review, and required external evidence are complete.
+Work on assigned issue #3 added administrator account list/create/update/activate/deactivate routes, a client account-management panel, and an audit-log view with action, user, and date filters. Issue #1 work adds student registration, one-time email verification and password reset, plus corresponding forms. Role and CSRF guards apply server-side; password/role changes and deactivation revoke sessions. Email change is read-only until a verified email-change flow exists. These changes are local and unmerged. Server syntax checks pass; client tests pass 17/17 and the production build passes. Mongo-backed integration tests could not run because MongoDB Memory Server attempted to download an uncached 781 MB Windows binary. SMTP delivery was not tested against a real mail server. Do not treat these items as verified or accepted until CI, review, merge, and remaining manual evidence are complete.
 
 Assessment date: 25 October 2026. Source of requirement IDs: submitted SRS v1.2 and `SRS/ID_Cheat_Sheet.md`. GitHub status is browser-verified; local `origin/main` could not be refreshed. This register describes the MVP slice only. A partial implementation is not acceptance of the complete SRS requirement.
 
@@ -36,12 +36,6 @@ Assessment date: 25 October 2026. Source of requirement IDs: submitted SRS v1.2 
 | FR-OE-027 (partial) | Audit event model/writer plus Administrator-only filtered, paginated and redacted review endpoint at `/api/admin/audit-logs`; indexed action/user/timestamp queries and integration coverage | Full required event coverage and a deployed 12-month retention report still require production evidence |
 
 ## Not started or not verified
-
-### Current #1 / #3 acceptance status
-
-- **#1 / OEPSE-7:** registration, unique email, password policy, hashed single-use verification/reset links, expiry and synthetic mail-transport behavior have implementation and automated test coverage in the repository. The relevant Mongo-backed tests were not executed successfully in this environment. Staging SMTP verification/reset delivery is not configured and remains blocked. Do not close.
-- **#3 / OEPSE-8:** administrator create/edit/activate/deactivate/role-change, CSRF/RBAC, self-demotion protection, session revocation and audit filtering/redaction have implementation and existing coverage. Added audit-IP/result-access and actual TTL-index coverage remains unverified until the Mongo-backed suite runs. Production retention evidence is also not established here. Do not close.
-- **Sprint 2:** partial implementation and documentation work only; no points are counted complete from this local branch. PR #60 is merged, but this follow-up is not yet pushed/reviewed/merged. Preserve the open acceptance work as carryover until CI and owner review succeed.
 
 - FR-OE-001, FR-OE-002: registration and email verification.
 - FR-OE-005: one-time password reset flow.
