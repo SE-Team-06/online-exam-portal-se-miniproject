@@ -483,6 +483,43 @@ app.delete('/api/admin/users/:userId/data', authenticate, requireRole('Administr
   } catch (e) { next(e); }
 });
 
+app.get('/api/admin/audit-logs', authenticate, requireRole('Administrator'), async (req, res, next) => {
+  try {
+    const parsed = z.object({
+      action: z.string().trim().min(1).max(80).optional(),
+      userId: objectId.optional(),
+      from: z.coerce.date().optional(),
+      to: z.coerce.date().optional(),
+      page: z.coerce.number().int().min(1).max(10_000).default(1),
+      limit: z.coerce.number().int().min(1).max(100).default(50),
+    }).safeParse(req.query);
+    if (!parsed.success) return bad(res, parsed.error.issues);
+    const { action, userId, from, to, page, limit } = parsed.data;
+    if (from && to && from > to) return sendError(res, 400, 'INVALID_RANGE', 'The from date must be before the to date.');
+    const filter = {};
+    if (action) filter.action = action;
+    if (userId) filter.userId = userId;
+    if (from || to) filter.timestamp = { ...(from ? { $gte: from } : {}), ...(to ? { $lte: to } : {}) };
+    const [total, logs] = await Promise.all([
+      AuditLog.countDocuments(filter),
+      AuditLog.find(filter).sort({ timestamp: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+    ]);
+    res.json({
+      page,
+      limit,
+      total,
+      logs: logs.map((log) => ({
+        id: String(log._id),
+        action: log.action,
+        userId: log.userId ? String(log.userId) : null,
+        ip: log.ip,
+        timestamp: log.timestamp,
+        details: redactAuditDetails(log.details),
+      })),
+    });
+  } catch (e) { next(e); }
+});
+
 app.use((_req, res) => sendError(res, 404, 'NOT_FOUND', 'The requested resource was not found.'));
 app.use((err, _req, res, _next) => {
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) return sendError(res, 400, 'INVALID_JSON', 'Request body must be valid JSON.');
@@ -492,6 +529,12 @@ app.use((err, _req, res, _next) => {
 async function safeQuestions(ids) {
   const docs = await Question.find({ _id: { $in: ids } });
   return ids.map((id) => { const q = docs.find((d) => String(d._id) === String(id)); return { id: String(id), text: q.text, options: q.options.map((o) => ({ id: o._id, text: o.text })), marks: q.marks }; });
+}
+function redactAuditDetails(details) {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return {};
+  return Object.fromEntries(Object.entries(details)
+    .filter(([key]) => !/(password|token|secret|email)/i.test(key))
+    .map(([key, value]) => [key, value && typeof value === 'object' && !Array.isArray(value) ? redactAuditDetails(value) : value]));
 }
 async function finishAttempt(attempt, exam, req = null) {
   if (attempt.status === 'SUBMITTED') return persistSubmissionAudit(attempt);

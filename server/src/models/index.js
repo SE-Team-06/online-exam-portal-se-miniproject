@@ -88,6 +88,8 @@ auditLogSchema.index(
     name: 'unique_attempt_submission_audit',
   },
 );
+auditLogSchema.index({ action: 1, timestamp: -1 });
+auditLogSchema.index({ userId: 1, timestamp: -1 });
 
 const notificationSchema = new Schema({
   recipientId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },

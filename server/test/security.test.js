@@ -41,6 +41,7 @@ const PROTECTED_ROUTES = [
   ['get', `/api/attempts/${DUMMY_ID}/result`, ANY],
   ['get', `/api/attempts/${DUMMY_ID}/review`, STUDENT],
   ['delete', `/api/admin/users/${DUMMY_ID}/data`, ADMIN],
+  ['get', '/api/admin/audit-logs', ADMIN],
 ];
 const PUBLIC_ROUTES = ['GET /api/health', 'POST /api/auth/login', 'POST /api/auth/logout'];
 

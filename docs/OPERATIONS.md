@@ -76,3 +76,26 @@ With 60 s probes, one failed check in a 2-hour window is 0.83% downtime. Probe a
 | Date | Backup file | Target | Result | By |
 |---|---|---|---|---|
 | | | | | |
+
+## Scale validation (OEPSE-25)
+
+Run the load measurement against a running API from a separate terminal or machine:
+
+```powershell
+$env:SCALE_REQUESTS=1000
+$env:SCALE_CONCURRENCY=25
+$env:SCALE_MAX_P95_MS=500
+$env:SCALE_MAX_ERROR_RATE=1
+npm.cmd --workspace server run scale:load -- http://localhost:4000/api/health
+```
+
+The command reports request count, concurrency, error rate, p50, p95 and maximum latency. It exits with code 1 when the configured p95 or error-rate target is missed. Record the JSON output, date, host and deployed version for each acceptance run; a local run is not a production capacity claim.
+
+Measure current MongoDB storage usage with:
+
+```powershell
+$env:MONGODB_URI='mongodb://localhost:27017/online_exam_portal'
+npm.cmd --workspace server run scale:storage
+```
+
+The storage report includes collection count, document count, data bytes, storage bytes and index bytes. Capacity acceptance requires repeating this measurement with the agreed representative dataset and retaining the output with the load result.

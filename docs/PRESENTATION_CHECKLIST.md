@@ -33,8 +33,8 @@ The existing issue bodies describe an eight-story, 45-provisional-point Sprint 2
 | #17 | OEPSE-16, 8 points; marked closed | Timer and answer recovery. Closed issue body still says planned work; compare refresh/retry criteria to code, then have the team decide whether to reopen/carry over. |
 | #18 | OEPSE-18, 3 points | Deadline auto-submit. Depends on attempts/saved answers; add saved-answer expiry and concurrent manual-submit coverage. |
 | #20 | OEPSE-24, 8 points | Auth/transport security. Server auth tests exist; deployment/TLS evidence remains. |
-| #21 | OEPSE-23, 5 points | Audit event coverage, filtering, IP, retention, redaction; overlaps OEPSE-23 text in #3. |
-| #22 | OEPSE-25, 8 points | Repeatable load and storage measurements; no target results are claimed. |
+| #21 | OEPSE-23, 5 points | Administrator-only audit filtering, pagination, IP display and sensitive-detail redaction are implemented and tested; complete event/retention evidence remains a deployment task. |
+| #22 | OEPSE-25, 8 points | Repeatable load and MongoDB storage measurement commands are implemented; run them against the agreed representative deployment and record target results. |
 | #25 | OEPSE-28, 5 points | Coverage reporting and Linux/container setup time; coverage and 60-minute setup target are unmeasured. |
 
 These eight mappings sum to the historical 45 points only if OEPSE-23 is counted once and the closed #17 work is included as a planned item. Do not treat them as current Jira status or assigned work. Confirm carryover, estimates, ownership, capacity and dates with the team before committing.
