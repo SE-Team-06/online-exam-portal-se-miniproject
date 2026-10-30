@@ -1,6 +1,5 @@
 ﻿import express from 'express';
 import mongoose from 'mongoose';
-import { isIP } from 'node:net';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
@@ -24,12 +23,6 @@ const FINALIZATION_LEASE_MS = 60_000;
 const bad = (res, issues) => sendError(res, 400, 'VALIDATION_ERROR', issues[0]?.message ?? 'Invalid request.');
 const asPublicUser = (user) => ({ id: user.id, name: user.name, email: user.email, role: user.role });
 const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid identifier.');
-// Resolve the client address through Express's configured trusted proxy hop.
-// The API must not be directly exposed while trust proxy is enabled.
-function trustedRequestIp(req) {
-  const ip = req?.ip;
-  return typeof ip === 'string' && isIP(ip) ? ip : null;
-}
 
 app.get('/api/health', async (_req, res) => {
   let database = 'down';
@@ -65,7 +58,7 @@ app.post('/api/auth/register', authActionLimit, async (req, res, next) => {
       await Promise.all([EmailActionToken.deleteMany({ userId: user._id, purpose: 'VERIFY_EMAIL' }), user.deleteOne()]);
       return sendError(res, 503, 'EMAIL_UNAVAILABLE', 'Registration email could not be sent. Please try again later.');
     }
-    await AuditLog.create({ action: 'ACCOUNT_REGISTERED', userId: user._id, ip: trustedRequestIp(req) });
+    await AuditLog.create({ action: 'ACCOUNT_REGISTERED', userId: user._id, ip: req.ip });
     res.status(202).json({ message: 'Registration received. Check your email for a verification link valid for 24 hours.' });
   } catch (error) { if (error.code === 11000) return sendError(res, 409, 'EMAIL_IN_USE', 'An account with that email already exists.'); next(error); }
 });
@@ -78,7 +71,7 @@ app.post('/api/auth/verify-email', authActionLimit, async (req, res, next) => {
     const user = await User.findById(action.userId);
     if (!user || !user.active) return sendError(res, 400, 'INVALID_OR_EXPIRED_TOKEN', 'This verification link is invalid, expired, or already used.');
     user.emailVerified = true; await user.save();
-    await AuditLog.create({ action: 'EMAIL_VERIFIED', userId: user._id, ip: trustedRequestIp(req) });
+    await AuditLog.create({ action: 'EMAIL_VERIFIED', userId: user._id, ip: req.ip });
     res.json({ message: 'Email verified. You can now sign in.' });
   } catch (error) { next(error); }
 });
@@ -109,7 +102,7 @@ app.post('/api/auth/password-reset/complete', authActionLimit, async (req, res, 
     if (!user || !user.active || !user.emailVerified) return sendError(res, 400, 'INVALID_OR_EXPIRED_TOKEN', 'This reset link is invalid, expired, or already used.');
     user.passwordHash = await hashPassword(parsed.data.password); user.failedLogins = 0; user.lockedUntil = null; await user.save();
     await Promise.all([Session.deleteMany({ userId: user._id }), EmailActionToken.deleteMany({ userId: user._id, purpose: 'RESET_PASSWORD' })]);
-    await AuditLog.create({ action: 'PASSWORD_RESET', userId: user._id, ip: trustedRequestIp(req) });
+    await AuditLog.create({ action: 'PASSWORD_RESET', userId: user._id, ip: req.ip });
     res.json({ message: 'Password reset. Sign in with your new password.' });
   } catch (error) { next(error); }
 });
@@ -126,14 +119,14 @@ app.post('/api/auth/login', loginLimit, async (req, res, next) => {
         if (user.failedLogins >= 5) { user.failedLogins = 0; user.lockedUntil = new Date(now.getTime() + 15 * 60_000); }
         await user.save();
       }
-      await AuditLog.create({ action: 'LOGIN_FAILED', ip: trustedRequestIp(req), details: { email } });
+      await AuditLog.create({ action: 'LOGIN_FAILED', ip: req.ip, details: { email } });
       return sendError(res, 401, 'LOGIN_FAILED', 'Email or password is incorrect, or the account cannot sign in.');
     }
     user.failedLogins = 0; user.lockedUntil = null; await user.save();
     const token = newOpaqueToken(); const csrfToken = newOpaqueToken();
     await Session.create({ tokenHash: hashToken(token), csrfToken, userId: user._id, lastActivity: now, expiresAt: new Date(now.getTime() + INACTIVITY_MS) });
     res.setHeader('Set-Cookie', sessionCookie(token, { secure: httpsRequired() }));
-    await AuditLog.create({ action: 'LOGIN_SUCCESS', userId: user._id, ip: trustedRequestIp(req) });
+    await AuditLog.create({ action: 'LOGIN_SUCCESS', userId: user._id, ip: req.ip });
     res.json({ user: asPublicUser(user), csrfToken });
   } catch (error) { next(error); }
 });
@@ -182,8 +175,6 @@ app.patch('/api/admin/users/:userId', authenticate, requireRole('Administrator')
     const user = await User.findById(req.params.userId);
     if (!user) return sendError(res, 404, 'USER_NOT_FOUND', 'User not found.');
     const updates = parsed.data;
-    const previousRole = user.role;
-    const previousActive = user.active;
     const isSelf = String(user._id) === String(req.user._id);
     if (isSelf && (updates.active === false || (updates.role && updates.role !== 'Administrator'))) {
       return sendError(res, 409, 'SELF_DEMOTION_FORBIDDEN', 'Administrators cannot deactivate or demote their own account.');
@@ -199,10 +190,7 @@ app.patch('/api/admin/users/:userId', authenticate, requireRole('Administrator')
     }
     await user.save();
     if (updates.active === false || updates.role || updates.password) await Session.deleteMany({ userId: user._id });
-    const auditDetails = { targetUserId: String(user._id), changedFields: Object.keys(updates).filter((key) => key !== 'password') };
-    if (updates.role && updates.role !== previousRole) auditDetails.roleChange = { from: previousRole, to: updates.role };
-    if (updates.active !== undefined && updates.active !== previousActive) auditDetails.activeChange = { from: previousActive, to: updates.active };
-    await writeAudit(req, 'USER_UPDATED', auditDetails);
+    await writeAudit(req, 'USER_UPDATED', { targetUserId: String(user._id), changedFields: Object.keys(updates).filter((key) => key !== 'password') });
     res.json({ user: adminUserView(user) });
   } catch (e) { next(e); }
 });
@@ -393,13 +381,10 @@ app.post('/api/exams/:examId/attempts', authenticate, requireRole('Student'), re
     let attempt;
     const existing = await Attempt.findOne({ examId: exam._id, studentId: req.user._id });
     if (existing?.status === 'IN_PROGRESS' && existing.endsAt > now) {
-      const requestIp = trustedRequestIp(req);
-      existing.lastStudentRequestIp = requestIp ?? existing.lastStudentRequestIp ?? null;
-      await Attempt.updateOne({ _id: existing._id, status: 'IN_PROGRESS' }, { $set: { lastStudentRequestIp: existing.lastStudentRequestIp } });
       return res.json({ attempt: { id: existing.id, examId: exam.id, endsAt: existing.endsAt, status: existing.status, answers: existing.answers }, questions: await safeQuestions(exam.questionIds), serverTime: new Date() });
     }
     if (existing) return sendError(res, 409, 'ATTEMPT_EXISTS', 'An attempt already exists for this exam.');
-    try { attempt = await Attempt.create({ examId: exam._id, studentId: req.user._id, startedAt: now, endsAt, answers: exam.questionIds.map((questionId) => ({ questionId })), lastStudentRequestIp: trustedRequestIp(req) }); }
+    try { attempt = await Attempt.create({ examId: exam._id, studentId: req.user._id, startedAt: now, endsAt, answers: exam.questionIds.map((questionId) => ({ questionId })) }); }
     catch (e) { if (e.code === 11000) return sendError(res, 409, 'ATTEMPT_EXISTS', 'An attempt already exists for this exam.'); throw e; }
     await writeAudit(req, 'ATTEMPT_STARTED', { examId: exam.id, attemptId: attempt.id });
     return res.status(201).json({ attempt: { id: attempt.id, examId: exam.id, endsAt: attempt.endsAt, status: attempt.status, answers: attempt.answers }, questions: await safeQuestions(exam.questionIds), serverTime: new Date() });
@@ -455,7 +440,6 @@ app.get('/api/instructor/results', authenticate, requireRole('Instructor', 'Admi
         passRate: subset.length ? subset.filter((row) => row.passed).length / subset.length : 0,
       };
     };
-    await writeAudit(req, 'RESULT_ACCESSED', { scope: 'instructor-results', attemptCount: rows.length });
     res.json({ results: rows, statistics: summarize(rows), examStatistics: exams.map((exam) => ({
       examId: exam.id, examTitle: exam.title, ...summarize(rows.filter((row) => String(row.examId) === exam.id)),
     })) });
@@ -473,7 +457,6 @@ app.get('/api/instructor/results.csv', authenticate, requireRole('Instructor', '
       examById.get(String(attempt.examId)), attempt.studentId?.name, attempt.studentId?.email,
       attempt.score, attempt.maximumScore, attempt.passed, attempt.submittedAt?.toISOString(), attempt.focusEvents.length,
     ].map(escape).join(','))];
-    await writeAudit(req, 'RESULT_ACCESSED', { scope: 'instructor-results-csv', attemptCount: attempts.length });
     res.type('text/csv').set('Content-Disposition', 'attachment; filename="exam-results.csv"').send(lines.join('\r\n'));
   } catch (e) { next(e); }
 });
@@ -481,10 +464,6 @@ app.get('/api/attempts/:attemptId', authenticate, requireRole('Student'), async 
   try {
     let attempt = await Attempt.findOne({ _id: req.params.attemptId, studentId: req.user._id });
     if (!attempt) return sendError(res, 404, 'ATTEMPT_NOT_FOUND', 'Attempt not found.');
-    if (attempt.status === 'IN_PROGRESS') {
-      attempt.lastStudentRequestIp = trustedRequestIp(req) ?? attempt.lastStudentRequestIp ?? null;
-      await Attempt.updateOne({ _id: attempt._id, status: 'IN_PROGRESS' }, { $set: { lastStudentRequestIp: attempt.lastStudentRequestIp } });
-    }
     const exam = await Exam.findById(attempt.examId);
     if (attempt.status === 'IN_PROGRESS' && new Date() >= attempt.endsAt) {
       attempt = await finishAttempt(attempt, exam, req);
@@ -507,7 +486,7 @@ app.put('/api/attempts/:attemptId/answers/:questionId', authenticate, requireRol
       const question = await Question.findById(answer.questionId).select('+correctOptionId');
       if (!question?.options.some((option) => option._id === p.data.selectedOptionId)) return sendError(res, 400, 'INVALID_OPTION', 'Select an option for this question.');
     }
-    const answerUpdate = { 'answers.$[answer].selectedOptionId': p.data.selectedOptionId, lastStudentRequestIp: trustedRequestIp(req) ?? attempt.lastStudentRequestIp ?? null };
+    const answerUpdate = { 'answers.$[answer].selectedOptionId': p.data.selectedOptionId };
     if (p.data.flagged !== undefined) answerUpdate['answers.$[answer].flagged'] = p.data.flagged;
     const saved = await Attempt.updateOne(
       {
@@ -561,7 +540,6 @@ app.get('/api/attempts/:attemptId/result', authenticate, async (req, res, next) 
     if (!attempt) return sendError(res, 404, 'ATTEMPT_NOT_FOUND', 'Result not found.');
     if (attempt.status !== 'SUBMITTED') return sendError(res, 409, 'RESULT_PENDING', 'The attempt has not been submitted.');
     const exam = await Exam.findById(attempt.examId);
-    await writeAudit(req, 'RESULT_ACCESSED', { attemptId: attempt.id, examId: String(attempt.examId) });
     res.json({ attempt: resultView(attempt, exam) });
   } catch (e) { next(e); }
 });
@@ -587,7 +565,6 @@ app.get('/api/attempts/:attemptId/review', authenticate, requireRole('Student'),
     if (!exam || !exam.reviewEnabled || new Date() < exam.endAt) {
       return sendError(res, 403, 'REVIEW_NOT_AVAILABLE', 'Answer review is not available.');
     }
-    await writeAudit(req, 'RESULT_ACCESSED', { attemptId: attempt.id, examId: String(attempt.examId), scope: 'answer-review' });
 
     const questions = await Question.find({
       _id: { $in: exam.questionIds },
@@ -731,14 +708,7 @@ async function finishAttempt(attempt, exam, req = null) {
         $expr: { $gt: ['$finalizationClaimUntil', '$$NOW'] },
       },
       {
-        $set: {
-          ...scored,
-          status: 'SUBMITTED',
-          submittedAt: new Date(),
-          submissionAuditPending: true,
-          submissionAutomatic: req === null,
-          submissionIp: (trustedRequestIp(req) ?? claimed.lastStudentRequestIp) ?? null,
-        },
+        $set: { ...scored, status: 'SUBMITTED', submittedAt: new Date(), submissionAuditPending: true, submissionAutomatic: req === null },
         $unset: { finalizationClaimToken: 1, finalizationClaimUntil: 1 },
       },
       { returnDocument: 'after' },
@@ -778,7 +748,6 @@ async function persistSubmissionAudit(attempt) {
     await AuditLog.create({
       action: 'ATTEMPT_SUBMITTED',
       userId: attempt.studentId,
-      ip: attempt.submissionIp ?? null,
       details: { examId: attempt.examId, attemptId: attempt.id, automatic: attempt.submissionAutomatic },
     });
   } catch (error) {
@@ -788,7 +757,7 @@ async function persistSubmissionAudit(attempt) {
   }
   return (await Attempt.findOneAndUpdate(
     { _id: attempt._id, status: 'SUBMITTED', submissionAuditPending: true },
-    { $set: { submissionAuditPending: false }, $unset: { submissionIp: 1, lastStudentRequestIp: 1 } },
+    { $set: { submissionAuditPending: false } },
     { returnDocument: 'after' },
   )) ?? (await Attempt.findById(attempt._id)) ?? attempt;
 }

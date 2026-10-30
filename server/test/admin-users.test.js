@@ -61,8 +61,6 @@ describe('administrator account lifecycle (OEPSE-8)', () => {
     const changed = await admin.patch(`/api/admin/users/${userId}`).set('x-csrf-token', csrfAdmin).send({ name: 'Updated Instructor', role: 'Administrator' }).expect(200);
     assert.equal(changed.body.user.name, 'Updated Instructor');
     assert.equal(changed.body.user.role, 'Administrator');
-    const roleAudit = await AuditLog.findOne({ action: 'USER_UPDATED', 'details.targetUserId': userId });
-    assert.deepEqual(roleAudit.details.roleChange, { from: 'Instructor', to: 'Administrator' });
     await createdAgent.get('/api/auth/me').expect(401);
     await createdAgent.post('/api/auth/login').send({ email: 'new@users.test', password: 'InstructorPass123' }).expect(200);
 
@@ -78,12 +76,6 @@ describe('administrator account lifecycle (OEPSE-8)', () => {
     const selfId = String((await User.findOne({ email: 'admin@users.test' }))._id);
     await admin.patch(`/api/admin/users/${selfId}`).set('x-csrf-token', csrfAdmin).send({ active: false }).expect(409);
     await admin.patch(`/api/admin/users/${selfId}`).set('x-csrf-token', csrfAdmin).send({ role: 'Student' }).expect(409);
-
-    const secondAdmin = await User.create({ name: 'Second Admin', email: 'second-admin@users.test', passwordHash, role: 'Administrator', emailVerified: true });
-    const secondAdminId = String(secondAdmin._id);
-    await admin.patch(`/api/admin/users/${secondAdminId}`).set('x-csrf-token', csrfAdmin).send({ role: 'Instructor' }).expect(200);
-    assert.deepEqual((await AuditLog.findOne({ action: 'USER_UPDATED', 'details.targetUserId': secondAdminId })).details.roleChange,
-      { from: 'Administrator', to: 'Instructor' });
 
     assert.ok(await AuditLog.exists({ action: 'USER_CREATED', 'details.targetUserId': userId }));
     assert.ok(await AuditLog.exists({ action: 'USER_UPDATED', 'details.targetUserId': userId }));
