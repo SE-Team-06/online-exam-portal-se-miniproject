@@ -104,6 +104,23 @@ describe('retention and data deletion on request (NFR-OE-014)', () => {
   });
 });
 
+describe('administrator audit review (OEPSE-23)', () => {
+  it('filters audit records and redacts sensitive detail fields', async () => {
+    await AuditLog.create({
+      action: 'REVIEW_TEST',
+      userId: admin.userId,
+      ip: '192.0.2.20',
+      details: { attemptId: 'attempt-1', email: 'private@example.test', csrfToken: 'secret-token' },
+    });
+    const response = await admin.get('/api/admin/audit-logs?action=REVIEW_TEST&limit=10').expect(200);
+    assert.equal(response.body.total, 1);
+    assert.equal(response.body.logs.length, 1);
+    assert.deepEqual(response.body.logs[0].details, { attemptId: 'attempt-1' });
+    assert.equal(response.body.logs[0].ip, '192.0.2.20');
+    await admin.get('/api/admin/audit-logs?from=2026-11-02&to=2026-11-01').expect(400);
+  });
+});
+
 describe('health check reflects the database (NFR-OE-004)', () => {
   it('returns 200 when the database answers and 503 when it does not', async () => {
     const up = await request(app).get('/api/health').expect(200);

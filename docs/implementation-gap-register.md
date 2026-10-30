@@ -29,7 +29,7 @@ Assessment date: 25 October 2026. Source of requirement IDs: submitted SRS v1.2 
 | FR-OE-021 | Focus-loss endpoint persists timestamps and writes an audit event; test verifies persisted event | Browser focus tracking and instructor-visible count/times are not implemented |
 | FR-OE-022 | Server-side score calculation and scoring unit/integration tests | Full scoring matrix and release behavior need broader evidence |
 | FR-OE-023 | Student-owned result API/UI | Instructor-controlled question-wise correct-answer release is incomplete |
-| FR-OE-027 (partial) | Audit event model/writer used by selected actions | Admin filtering/view, full required event coverage, IP and 12-month retention are not implemented |
+| FR-OE-027 (partial) | Audit event model/writer plus Administrator-only filtered, paginated and redacted review endpoint at `/api/admin/audit-logs`; indexed action/user/timestamp queries and integration coverage | Full required event coverage and a deployed 12-month retention report still require production evidence |
 
 ## Not started or not verified
 
@@ -42,7 +42,7 @@ Assessment date: 25 October 2026. Source of requirement IDs: submitted SRS v1.2 
 - FR-OE-024: instructor attempt analytics and summary statistics.
 - FR-OE-025: CSV results export.
 - FR-OE-026: assignment/result notifications.
-- NFR-OE-001 to NFR-OE-014: no complete acceptance evidence for the specified performance, availability, recovery, accessibility, compatibility, scalability, coverage, portability, and retention targets. Local tests are not load, availability, or accessibility evidence.
+- NFR-OE-001 to NFR-OE-014: repeatable OEPSE-25 load and MongoDB storage measurement commands now exist under `server/src/ops/scale.js`, with configurable p95/error thresholds; production-scale results, availability, accessibility, compatibility, coverage, portability, and retention evidence still require execution against the agreed representative deployment/dataset.
 - SEC-OE-005 and SEC-OE-012: production TLS/rejection of HTTP and encryption at rest for personal data/backups.
 - SEC-OE-011: complete audit event fields, retention, and access requirements.
 - Production deployment, monitoring, durable backup/recovery, and operational secrets management.
