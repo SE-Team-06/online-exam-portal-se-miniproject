@@ -35,7 +35,7 @@ TLS is terminated by a reverse proxy (nginx, Caddy or a cloud load balancer) in 
 
 1. Proxy accepts **TLS 1.2 and 1.3 only**, with a valid certificate (e.g. Let's Encrypt).
 2. Port 80 only redirects to HTTPS; it never forwards traffic to Node.
-3. Proxy sets `X-Forwarded-Proto` and `X-Forwarded-For`; Node listens on `127.0.0.1` or a private network only.
+3. Proxy sets `X-Forwarded-Proto` and `X-Forwarded-For`; Node binds to `127.0.0.1` by default (`HOST`) or a private network interface only. A public direct path to Node would let a caller spoof the proxy headers and is unsupported.
 4. Environment: `NODE_ENV=production`, `REQUIRE_HTTPS=true`, `APP_ORIGIN=https://<your-domain>`, `MONGODB_URI` pointing to an authenticated MongoDB that is not exposed publicly.
 5. Secrets live only in the server environment, never in Git (`.env` is ignored).
 

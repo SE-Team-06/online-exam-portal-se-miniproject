@@ -1,10 +1,16 @@
 # Implementation and requirement gap register
 
-## Sprint 2 closure readiness — 30 October 2026
+## Current acceptance snapshot — 30 October 2026
 
-PR #60 is verified merged into canonical `main` at `4d599af`. On `fix/sprint2-account-acceptance-audit`, issue #3 receives request-IP persistence for manual/automatic submission and recovery, result-access audit events, validated IP audit writes, role-change audit details, and an actual MongoDB TTL-index test. Automated coverage was added for those paths. Local syntax checks pass; client tests pass 17/17 and client production build passes. Focused server suites failed before test execution because MongoDB Memory Server rejected its downloaded archive's MD5. Root `npm ci` hit Windows workspace symlink `EPERM`. SMTP delivery remains **BLOCKED** without a staging service; synthetic transport is not external evidence. These issues remain open until CI, review, and required external evidence are complete.
+PR #63 is merged into canonical `main` at `2db1c9d83281601c99a81dd0b018ebe0ec2f5713`. Its verified Actions run [41099637545](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/41099637545) passed clean dependency installation, server tests 168/168, client tests 17/17, syntax checks, and production build. A new `fix/final-issues-1-3-acceptance` branch adds loopback-by-default API binds, production APP_ORIGIN validation, direct-socket anti-spoof tests, and read-only audit API assertions. Those branch changes need their own CI/review and are not represented as passed yet.
 
-Assessment date: 25 October 2026. Source of requirement IDs: submitted SRS v1.2 and `SRS/ID_Cheat_Sheet.md`. GitHub status is browser-verified; local `origin/main` could not be refreshed. This register describes the MVP slice only. A partial implementation is not acceptance of the complete SRS requirement.
+- **#1:** registration/recovery implementation and tests are present in main. SMTP delivery has not been exercised against staging and remains **BLOCKED** pending secure staging configuration and disposable-mailbox evidence. Do not close.
+- **#3:** admin account lifecycle, audit UI/API, result/submission events, redaction, filters, pagination, and retention-index checks are in main and covered by the green main CI run. Production database least-privilege/immutable audit storage is not deployed or evidenced; candidate branch tests the application's read-only interface. Do not close until candidate CI and independent review complete.
+- The local MongoDB binary cache has a checksum mismatch, so this Windows machine cannot independently rerun Mongo-backed integration tests without a valid download. Do not bypass the checksum. Use GitHub Actions' clean Linux run for reproducible test evidence.
+
+### Historical audit snapshot — 25 October 2026 (superseded)
+
+Source of requirement IDs: submitted SRS v1.2 and `SRS/ID_Cheat_Sheet.md`. GitHub status and local branch statements below reflect the dated audit, not the current remote state. This register describes the MVP slice only. A partial implementation is not acceptance of the complete SRS requirement.
 
 ## Evidence reviewed
 
@@ -37,7 +43,7 @@ Assessment date: 25 October 2026. Source of requirement IDs: submitted SRS v1.2 
 
 ## Not started or not verified
 
-### Current #1 / #3 acceptance status
+### #1 / #3 status as recorded in the 25 October snapshot
 
 - **#1 / OEPSE-7:** registration, unique email, password policy, hashed single-use verification/reset links, expiry and synthetic mail-transport behavior have implementation and automated test coverage in the repository. The relevant Mongo-backed tests were not executed successfully in this environment. Staging SMTP verification/reset delivery is not configured and remains blocked. Do not close.
 - **#3 / OEPSE-8:** administrator create/edit/activate/deactivate/role-change, CSRF/RBAC, self-demotion protection, session revocation and audit filtering/redaction have implementation and existing coverage. Added audit-IP/result-access and actual TTL-index coverage remains unverified until the Mongo-backed suite runs. Production retention evidence is also not established here. Do not close.

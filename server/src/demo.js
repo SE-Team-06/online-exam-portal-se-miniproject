@@ -19,7 +19,8 @@ const now = new Date();
 const exam = await Exam.create({ ownerId: instructor._id, title: 'Demo: HTTP Basics', durationMinutes: 10, startAt: new Date(now.getTime() - 60_000), endAt: new Date(now.getTime() + 30 * 60_000), passMark: 1, questionIds: [question._id], assignedStudentIds: [student._id], status: 'Published' });
 await Notification.create({ recipientId: student._id, type: 'EXAM_ASSIGNED', referenceId: exam._id, title: 'New exam assigned', message: `You have been assigned "${exam.title}".` });
 const port = Number(process.env.PORT ?? 4000);
-const server = app.listen(port, () => {
+const host = process.env.HOST ?? '127.0.0.1';
+const server = app.listen(port, host, () => {
   console.log(`Demo API: http://localhost:${port}`);
   console.log('Temporary demo accounts (discarded when stopped):');
   console.log(`Instructor: instructor@example.test / ${password}`);

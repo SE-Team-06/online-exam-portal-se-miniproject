@@ -1,40 +1,49 @@
-# Sprint 2 acceptance status — 30 October 2026
+# Sprint 2 acceptance status — final follow-up, 30 October 2026
 
 ## Verified baseline
 
 - Canonical repository: [SE-Team-06/online-exam-portal-se-miniproject](https://github.com/SE-Team-06/online-exam-portal-se-miniproject).
-- PR #60 is merged to `main` at `4d599af441ab352829007a1d6a61e49dba068895`.
-- Acceptance follow-up branch: `fix/sprint2-account-acceptance-audit`, based on that `main` commit.
-- No review or merge of this follow-up is claimed. No issues are closed by this work.
+- PR #63 merged to `main` as `2db1c9d83281601c99a81dd0b018ebe0ec2f5713`.
+- Its push Actions run [41099637545](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/41099637545) completed successfully: clean locked dependency install, server tests **168/168**, client tests **17/17**, server syntax checks and Vite production build passed.
+- The feature branch for this final pass is based on that `main`. Changes described below are not part of the successful run until a new PR check completes.
 
-## #1 — Registration and account recovery
+## Issue #1 — registration and recovery
 
-Existing implementation includes student registration, unique email, password policy, email verification, one-time expiring verification/reset tokens, generic reset response, session revocation, configurable mail delivery and a synthetic test transport. Tests cover invalid/duplicate registration, verification success/expiry/reuse, reset success/expiry/reuse, weak passwords, and synthetic delivery failure/success paths.
+| Acceptance area | Implementation and test evidence | Status |
+| --- | --- | --- |
+| Registration, unique email, password validation/hash, unverified-login rejection | `server/src/app.js`, `server/src/security/password.js`; `server/test/auth-lifecycle.test.js` | **VERIFIED IN MERGED MAIN** by the successful CI run; candidate adds fail-closed production-origin checks, pending CI |
+| Verification link hash, single use, 24-hour expiry | Email action token model and verification route; lifecycle integration tests cover success, invalid, expired and reused links | **VERIFIED IN MERGED MAIN** |
+| Generic password reset, hashed single-use 30-minute token, password policy and session revocation | Reset routes; lifecycle tests cover generic known/unknown response, expiry, reuse and session invalidation | **VERIFIED IN MERGED MAIN** |
+| SMTP configuration and encrypted transport | `server/src/security/email.js` requires STARTTLS for `smtp://`, implicit TLS for `smtps://`, and rejects TLS/certificate-validation disable flags; `server/test/email-config.test.js` covers secure and rejected URL cases. | **IMPLEMENTED**; local configuration tests pass 2/2 |
+| Actual message delivery | Fake transport tests exercise message creation and safe failure. Staging mail credentials/service are not configured here. | **IMPLEMENTED BUT NOT EXTERNALLY VERIFIED**; real delivery is **BLOCKED** |
+| Registration, verification, forgot/reset UI states | `client/src/AuthPanel.jsx` | **IMPLEMENTED**; browser walkthrough against a deployed API/mail service remains unverified |
 
-**Status: PARTIAL / verification pending.** Focused Mongo-backed tests did not reach test execution because MongoDB Memory Server rejected the downloaded archive's MD5. Actual SMTP delivery is **BLOCKED** until staging credentials are securely configured in the local environment. No credential, token or password is recorded here.
+No credentials, passwords, or verification/reset tokens are recorded. To verify delivery, an operator must inject `APP_ORIGIN`, `SMTP_URL`, and `MAIL_FROM` through the staging secret store, use a disposable test mailbox, submit registration and reset requests, confirm both messages and links arrive, exercise verification/reset once, then confirm expired/reused links fail. Keep secrets out of shell transcripts and source control.
 
-## #3 — Administrator lifecycle and audit
+## Issue #3 — administrator users and audit
 
-Existing implementation includes administrator account listing/creation/editing, activation/deactivation, role changes, CSRF/RBAC, self-demotion protection, session revocation, and filtered, paginated, redacted audit review. This branch adds validated IP capture, student submission-IP persistence through automatic finalization and audit retry, explicit null IP where unavailable, result-access events, role-change audit details, and live MongoDB TTL-index verification. `docs/OPERATIONS.md` records indefinite audit retention; production policy/deployment evidence remains external.
+| Acceptance area | Implementation and test evidence | Status |
+| --- | --- | --- |
+| Create/list/edit/activate/deactivate/role changes | `/api/admin/users`, `client/src/AdminUsersPanel.jsx`, `server/test/admin-users.test.js` | **VERIFIED IN MERGED MAIN** by successful CI |
+| RBAC, CSRF, self-demotion and last-admin protection, session revocation | `server/src/middleware/auth.js`, admin route; admin-user and security tests | **VERIFIED IN MERGED MAIN** by successful CI |
+| Login, publication, submission, result access and user-change audit events with actor/time/IP | `writeAudit`, authentication/admin routes and submission finalization; workflow/admin tests | **VERIFIED IN MERGED MAIN**; new direct-socket spoof assertions and actor-field assertion await candidate CI |
+| Audit UI, administrator-only access, filters, pagination, safe redaction | `client/src/AdminUsersPanel.jsx`, `/api/admin/audit-logs`, `server/test/operations.test.js` | **VERIFIED IN MERGED MAIN** by successful CI |
+| Submission IP survives automatic finalization and retry; null if no request IP; unique event/idempotency | Attempt fields, `finishAttempt`/`persistSubmissionAudit`, partial unique index and workflow recovery tests | **VERIFIED IN MERGED MAIN**; candidate corrects all direct-Supertest IP expectations and awaits CI |
+| Retention | `docs/OPERATIONS.md` specifies indefinite audit retention; operations test inspects actual MongoDB TTL indexes | **VERIFIED IN MERGED MAIN** by successful CI; external database backup/retention procedures remain deployment work |
+| Audit tampering prevention | Application exposes read-only audit review; no audit update/delete route. Candidate adds explicit API negative tests. | **PARTIAL** until candidate CI; database operators still require least-privilege controls outside this application |
 
-**Status: PARTIAL / verification pending.** Focused Mongo-backed tests failed during database binary integrity validation, before assertion execution. Review full issue acceptance and obtain successful CI evidence before closure.
+The candidate also binds the API entrypoints to loopback by default (`HOST=127.0.0.1`) so a caller cannot bypass the documented one-hop reverse proxy and spoof forwarded IP headers. Non-loopback deployment requires a private interface and a firewall-enforced proxy boundary. Local client tests pass 17/17, production Vite build passes, server syntax checks pass, and SMTP URL tests pass 2/2. Mongo-backed tests on this Windows machine fail before assertions because its cached MongoDB archive fails published MD5 verification. Candidate changes have no Actions result yet.
 
-## Local checks
+## Current acceptance decision
 
-| Check | Result |
-| --- | --- |
-| Root `npm ci` | Blocked: Windows `EPERM` creating the npm workspace symlink. |
-| Server source/test syntax checks | Passed. |
-| Client tests | Passed, 17/17. |
-| Client production build | Passed. |
-| Focused server integration tests | Not verified: MongoDB Memory Server archive MD5 mismatch prevented startup. |
-| SMTP delivery | Blocked: no staging SMTP configuration supplied. |
-| PR #60 CI | Previously verified successful in remote audit; follow-up branch has no CI run yet. |
+- **#1: NOT READY TO CLOSE.** Core behavior and CI are verified in merged `main`; real verification/reset SMTP delivery and deployed browser/link acceptance are outstanding.
+- **#3: NOT READY TO CLOSE YET.** Core implementation and merged-main CI are verified. Candidate security/test changes need a new passing PR check and independent review. Production least-privilege database controls are not deployed or evidenced.
+- Do not close either issue solely because PR #63 merged. No Sprint 2 points are newly counted by this report.
 
-## Remaining actions and carryover
+## Remaining actions
 
-1. Push the focused branch and open a PR against `main`; request independent repository-owner review.
-2. Run CI on the PR and resolve all failures. Do not close #1 or #3 based on source presence alone.
-3. Supply staging SMTP configuration securely outside source control; verify both verification and password-reset delivery, expiry and reuse.
-4. Review issue #3's administrator/audit acceptance, including result access, filters, pagination, access control, redaction, role-change audit, and retention evidence.
-5. Keep Sprint 2 completion and points partial until the team confirms the sprint record and accepted work. Do not count this unreviewed branch as completed points.
+1. Run and review CI for the final-pass PR, including the new origin, proxy-spoof, and read-only audit tests.
+2. Request independent repository-owner review; do not merge automatically.
+3. Perform staging SMTP delivery and deployed account-link walkthrough for #1.
+4. Record staging/deployment network controls for trusted proxy and database audit permissions for #3.
+5. Keep #1 and #3 open until their acceptance evidence is attached and reviewed.

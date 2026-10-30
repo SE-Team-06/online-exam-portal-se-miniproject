@@ -30,6 +30,7 @@ Create `/etc/online-exam-portal.env`, owned by root and readable by the service 
 ```dotenv
 NODE_ENV=production
 PORT=4000
+HOST=127.0.0.1
 MONGODB_URI=mongodb://oep_user:<encoded-password>@127.0.0.1:27017/online_exam_portal?authSource=admin
 APP_ORIGIN=https://exam.example.edu
 REQUIRE_HTTPS=true
@@ -39,7 +40,7 @@ BACKUP_INTERVAL_HOURS=24
 BACKUP_RETAIN=7
 ```
 
-`MONGODB_URI` is required. `PORT` defaults to 4000; `APP_ORIGIN` must be the deployed site's exact origin. `NODE_ENV=production` enforces HTTPS and Secure session cookies; TLS must terminate at the proxy. `SESSION_INACTIVITY_MINUTES` defaults to 30. Registration and password-reset email require `SMTP_URL` (a Nodemailer SMTP connection URL) and `MAIL_FROM`; without them, registration returns an email-delivery error and reset requests do not send a link. Use a dedicated mail account, keep its URL outside the repository, and verify delivery and link expiry in the target environment. `BACKUP_DIR` enables scheduled backups; when enabled, create that directory and grant the service account write access. The backup settings default to 24 hours and seven retained files. Store credentials outside the repository and URL-encode special characters in the MongoDB password.
+`MONGODB_URI` is required. `PORT` defaults to 4000 and `HOST` defaults to loopback (`127.0.0.1`); keep the API inaccessible from untrusted networks because the app trusts one reverse-proxy hop for HTTPS and client-IP resolution. Set `HOST` to a private interface only when the proxy is on a separate host, and enforce that network boundary in the firewall. `APP_ORIGIN` must be the deployed site's exact HTTPS origin; production account-action links fail closed if it is absent or invalid instead of generating localhost links. `NODE_ENV=production` enforces HTTPS and Secure session cookies; TLS must terminate at the proxy. `SESSION_INACTIVITY_MINUTES` defaults to 30. Registration and password-reset email require `SMTP_URL` and `MAIL_FROM`; without them, registration returns an email-delivery error and reset requests do not send a link. Use `smtps://` for implicit TLS or `smtp://` with STARTTLS; the application requires SMTP encryption and rejects settings that disable TLS or certificate verification. Use a dedicated mail account, keep its URL outside the repository, and verify delivery and link expiry in the target environment. `BACKUP_DIR` enables scheduled backups; when enabled, create that directory and grant the service account write access. The backup settings default to 24 hours and seven retained files. Store credentials outside the repository and URL-encode special characters in the MongoDB password.
 
 If configuring via dotenv instead of a service manager, put the file at `server/.env` because npm runs the server with that workspace as its working directory. Do not commit it.
 

@@ -10,6 +10,11 @@ import { hashPassword, verifyPassword } from '../src/security/password.js';
 
 let mongo; let instructor; let student; let stranger; let otherInstructor; let instructorAgent; let studentAgent; let strangerAgent; let otherInstructorAgent; let csrfInstructor; let csrfStudent; let csrfStranger; let csrfOtherInstructor; let examId; let questionId; let attemptId; let loginAddress = 0;
 const login = async (agent, email) => { loginAddress += 1; const response = await agent.post('/api/auth/login').set('x-forwarded-for', `203.0.113.${loginAddress}`).send({ email, password: 'TestPass123' }).expect(200); return response.body.csrfToken; };
+const withDirectRequestIp = async (work) => {
+  const priorTrustProxy = app.get('trust proxy');
+  app.set('trust proxy', false);
+  try { return await work(); } finally { app.set('trust proxy', priorTrustProxy); }
+};
 const examPayload = (overrides = {}) => ({
   title: 'Lifecycle test', durationMinutes: 10,
   startAt: new Date(Date.now() - 60_000).toISOString(), endAt: new Date(Date.now() + 600_000).toISOString(),
@@ -230,20 +235,24 @@ describe('SRS-aligned exam workflow', () => {
     assert.ok(afterFocus.focusEvents[0] instanceof Date);
     await studentAgent.put(`/api/attempts/${attemptId}/answers/${questionId}`).set('x-csrf-token', csrfStudent).send({ selectedOptionId: 'a', flagged: false }).expect(200);
     await studentAgent.put(`/api/attempts/${attemptId}/answers/${questionId}`).set('x-csrf-token', csrfStudent).send({ selectedOptionId: 'not-an-option' }).expect(400);
-    const result = await studentAgent.post(`/api/attempts/${attemptId}/submit`).set('x-csrf-token', csrfStudent).set('x-forwarded-for', '198.51.100.44').expect(200);
+    const result = await withDirectRequestIp(() => studentAgent.post(`/api/attempts/${attemptId}/submit`).set('x-csrf-token', csrfStudent).set('x-forwarded-for', '198.51.100.44').expect(200));
     assert.equal(result.body.attempt.score, 2); assert.equal(result.body.attempt.passed, true);
     const repeated = await studentAgent.post(`/api/attempts/${attemptId}/submit`).set('x-csrf-token', csrfStudent).expect(200);
     assert.deepEqual(repeated.body.attempt, result.body.attempt);
     await strangerAgent.get(`/api/attempts/${attemptId}/result`).expect(404);
     const submissionAudit = await AuditLog.findOne({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': attemptId });
-    assert.equal(submissionAudit.ip, '198.51.100.44');
+    assert.ok(submissionAudit.ip);
+    assert.notEqual(submissionAudit.ip, '198.51.100.44', 'direct clients cannot choose their audit IP with X-Forwarded-For');
     assert.equal((await Attempt.findById(attemptId)).status, 'SUBMITTED');
   });
   it('prevents repeated attempts and records a result only after submission', async () => {
     await studentAgent.post(`/api/exams/${examId}/attempts`).set('x-csrf-token', csrfStudent).expect(409);
-    await studentAgent.get(`/api/attempts/${attemptId}/result`).set('x-forwarded-for', '198.51.100.47').expect(200);
+    await withDirectRequestIp(() => studentAgent.get(`/api/attempts/${attemptId}/result`).set('x-forwarded-for', '198.51.100.47').expect(200));
     const resultAudit = await AuditLog.findOne({ action: 'RESULT_ACCESSED', 'details.attemptId': attemptId });
-    assert.equal(resultAudit.ip, '198.51.100.47');
+    const submissionAudit = await AuditLog.findOne({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': attemptId });
+    assert.ok(resultAudit.ip);
+    assert.notEqual(resultAudit.ip, '198.51.100.47', 'direct clients cannot choose their audit IP with X-Forwarded-For');
+    assert.equal(resultAudit.ip, submissionAudit.ip);
   });
   it('does not reveal answer keys through question reads', async () => {
     const response = await request(app).get('/api/health').expect(200); assert.equal(response.body.status, 'ok');
@@ -251,38 +260,49 @@ describe('SRS-aligned exam workflow', () => {
   });
   it('auto-submits an expired attempt with no answers and records its final status and score', async () => {
     const exam = await Exam.create({ ownerId: instructor._id, title: 'Timeout test', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
-    const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).set('x-forwarded-for', '198.51.100.45').expect(201);
-    const id = started.body.attempt.id;
-    const expiredAt = new Date(Date.now() - 1000);
-    await Attempt.updateOne({ _id: id }, { $set: { endsAt: expiredAt } });
-    await submitExpiredAttempts();
-    const saved = await Attempt.findById(id);
-    assert.equal(saved.status, 'SUBMITTED');
-    assert.equal(saved.score, 0);
-    assert.equal(saved.correctCount, 0);
-    assert.equal(saved.wrongCount, 0);
-    assert.equal(saved.unansweredCount, 1);
-    assert.equal(saved.endsAt.getTime(), expiredAt.getTime());
-    assert.ok(saved.submittedAt instanceof Date);
-    const audit = await AuditLog.findOne({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id });
-    assert.equal(audit.ip, '198.51.100.45');
-    assert.equal(audit.details.automatic, true);
+    await withDirectRequestIp(async () => {
+      const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).set('x-forwarded-for', '198.51.100.45').expect(201);
+      const id = started.body.attempt.id;
+      const startAudit = await AuditLog.findOne({ action: 'ATTEMPT_STARTED', 'details.attemptId': id });
+      assert.ok(startAudit.ip);
+      assert.notEqual(startAudit.ip, '198.51.100.45', 'direct clients cannot choose their audit IP with X-Forwarded-For');
+      const expiredAt = new Date(Date.now() - 1000);
+      await Attempt.updateOne({ _id: id }, { $set: { endsAt: expiredAt } });
+      await submitExpiredAttempts();
+      const saved = await Attempt.findById(id);
+      assert.equal(saved.status, 'SUBMITTED');
+      assert.equal(saved.score, 0);
+      assert.equal(saved.correctCount, 0);
+      assert.equal(saved.wrongCount, 0);
+      assert.equal(saved.unansweredCount, 1);
+      assert.equal(saved.endsAt.getTime(), expiredAt.getTime());
+      assert.ok(saved.submittedAt instanceof Date);
+      const audit = await AuditLog.findOne({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id });
+      assert.equal(audit.ip, startAudit.ip);
+      assert.equal(audit.details.automatic, true);
+    });
   });
   it('returns the finalized result when reading an attempt after its deadline', async () => {
     const exam = await Exam.create({ ownerId: instructor._id, title: 'Expired attempt read', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
-    const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).set('x-forwarded-for', '198.51.100.46').expect(201);
-    const id = started.body.attempt.id;
-    const expiredAt = new Date(Date.now() - 1000);
-    await Attempt.updateOne({ _id: id }, { $set: { endsAt: expiredAt } });
+    await withDirectRequestIp(async () => {
+      const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).set('x-forwarded-for', '198.51.100.46').expect(201);
+      const id = started.body.attempt.id;
+      const startAudit = await AuditLog.findOne({ action: 'ATTEMPT_STARTED', 'details.attemptId': id });
+      assert.notEqual(startAudit.ip, '198.51.100.46', 'direct clients cannot choose their audit IP with X-Forwarded-For');
+      const expiredAt = new Date(Date.now() - 1000);
+      await Attempt.updateOne({ _id: id }, { $set: { endsAt: expiredAt } });
 
-    const response = await studentAgent.get(`/api/attempts/${id}`).expect(200);
+      const response = await studentAgent.get(`/api/attempts/${id}`).expect(200);
 
-    assert.equal(response.body.attempt.status, 'SUBMITTED');
-    assert.equal(response.body.attempt.score, 0);
-    assert.equal(response.body.attempt.unansweredCount, 1);
-    assert.equal(response.body.questions, undefined);
-    const saved = await Attempt.findById(id);
-    assert.equal(saved.endsAt.getTime(), expiredAt.getTime());
+      assert.equal(response.body.attempt.status, 'SUBMITTED');
+      assert.equal(response.body.attempt.score, 0);
+      assert.equal(response.body.attempt.unansweredCount, 1);
+      assert.equal(response.body.questions, undefined);
+      const saved = await Attempt.findById(id);
+      assert.equal(saved.endsAt.getTime(), expiredAt.getTime());
+      const submissionAudit = await AuditLog.findOne({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id });
+      assert.equal(submissionAudit.ip, startAudit.ip);
+    });
   });
   it('includes answers saved before the deadline when the expiry worker scores the attempt', async () => {
     const exam = await Exam.create({ ownerId: instructor._id, title: 'Saved answer timeout', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
@@ -614,16 +634,18 @@ describe('SRS-aligned exam workflow', () => {
     }
   });
   it('returns 429 after ten login attempts from the same IP in one minute', async () => {
-    for (let i = 0; i < 10; i += 1) {
+    await withDirectRequestIp(async () => {
+      for (let i = 0; i < 10; i += 1) {
+        await request(app).post('/api/auth/login')
+          .set('x-forwarded-for', '192.0.2.99')
+          .send({ email: 'rate-limit@example.test', password: 'InvalidPass123' })
+          .expect(401);
+      }
       await request(app).post('/api/auth/login')
         .set('x-forwarded-for', '192.0.2.99')
         .send({ email: 'rate-limit@example.test', password: 'InvalidPass123' })
-        .expect(401);
-    }
-    await request(app).post('/api/auth/login')
-      .set('x-forwarded-for', '192.0.2.99')
-      .send({ email: 'rate-limit@example.test', password: 'InvalidPass123' })
-      .expect(429);
+        .expect(429);
+    });
   });
 });
 
