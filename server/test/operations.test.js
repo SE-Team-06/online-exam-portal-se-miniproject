@@ -6,6 +6,7 @@ import path from 'node:path';
 import mongoose from 'mongoose';
 import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server-core';
+import { fileURLToPath } from 'node:url';
 import app from '../src/app.js';
 import { Attempt, AuditLog, Exam, Notification, Question, Session, User } from '../src/models/index.js';
 import { hashPassword } from '../src/security/password.js';
@@ -15,7 +16,7 @@ import { availabilityByMonth } from '../src/ops/availability.js';
 // Issue #23 / OEPSE-26: NFR-OE-004, NFR-OE-006, NFR-OE-014
 let mongo; let backupDir; let admin; let csrfAdmin;
 before(async () => {
-  process.env.MONGOMS_DOWNLOAD_DIR ??= new URL('../../.cache/mongodb-binaries', import.meta.url).pathname.replace(/^\//, '').replaceAll('/', '\\');
+  process.env.MONGOMS_DOWNLOAD_DIR ??= fileURLToPath(new URL('../../.cache/mongodb-binaries', import.meta.url));
   mongo = await MongoMemoryServer.create(); await mongoose.connect(mongo.getUri());
   backupDir = await mkdtemp(path.join(tmpdir(), 'oep-backups-'));
   const passwordHash = await hashPassword('AdminPass123');

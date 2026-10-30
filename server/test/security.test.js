@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import mongoose from 'mongoose';
 import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server-core';
+import { fileURLToPath } from 'node:url';
 import app from '../src/app.js';
 import { AuditLog, Session, User } from '../src/models/index.js';
 import { hashPassword } from '../src/security/password.js';
@@ -58,7 +59,7 @@ const send = (agent, method, path, csrf) => {
 };
 
 before(async () => {
-  process.env.MONGOMS_DOWNLOAD_DIR ??= new URL('../../.cache/mongodb-binaries', import.meta.url).pathname.replace(/^\//, '').replaceAll('/', '\\');
+  process.env.MONGOMS_DOWNLOAD_DIR ??= fileURLToPath(new URL('../../.cache/mongodb-binaries', import.meta.url));
   mongo = await MongoMemoryServer.create(); await mongoose.connect(mongo.getUri());
   const passwordHash = await hashPassword(PASSWORD);
   for (const role of ANY) {
