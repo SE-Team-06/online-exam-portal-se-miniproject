@@ -63,6 +63,9 @@ describe('administrator account lifecycle (OEPSE-8)', () => {
     assert.equal(changed.body.user.role, 'Administrator');
     const roleAudit = await AuditLog.findOne({ action: 'USER_UPDATED', 'details.targetUserId': userId });
     assert.deepEqual(roleAudit.details.roleChange, { from: 'Instructor', to: 'Administrator' });
+    assert.equal(String(roleAudit.userId), String((await User.findOne({ email: 'admin@users.test' }))._id));
+    assert.ok(roleAudit.timestamp instanceof Date);
+    assert.ok(roleAudit.ip);
     await createdAgent.get('/api/auth/me').expect(401);
     await createdAgent.post('/api/auth/login').send({ email: 'new@users.test', password: 'InstructorPass123' }).expect(200);
 

@@ -56,7 +56,7 @@ With 60 s probes, one failed check in a 2-hour window is 0.83% downtime. Probe a
 - Deletes the user, their attempts, notifications and sessions, and removes them from exam assignments.
 - Refuses with 409 `USER_OWNS_CONTENT` if the account owns questions or exams (an instructor's content must be reassigned first).
 - **Audit entries are kept** (they hold only the user ID) and a `USER_DATA_DELETED` entry is written.
-- There is no UI yet. Account deactivation arrives with admin user management (#3).
+- Administrators can deactivate accounts in the `Manage accounts` panel. The same administrator-only panel exposes the read-only audit review interface and its date, user, and action filters. Retention is indefinite in the application database; operators must preserve the MongoDB audit collection in their backup/retention controls and record production verification separately.
 
 ## Evidence and limits
 
