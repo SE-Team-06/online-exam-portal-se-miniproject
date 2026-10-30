@@ -307,8 +307,16 @@ describe('SRS-aligned exam workflow', () => {
   });
   it('returns the existing result when its owner submits after expiry processing', async () => {
     const exam = await Exam.create({ ownerId: instructor._id, title: 'Idempotent submit', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
+    // Supertest connects directly to Express; there is no trusted reverse proxy here.
+    // Ignore the spoofed forwarding header and compare against this request's observed peer IP.
+    const priorTrustProxy = app.get('trust proxy');
+    app.set('trust proxy', false);
+    try {
     const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).set('x-forwarded-for', '198.51.100.46').expect(201);
     const id = started.body.attempt.id;
+    const startAudit = await AuditLog.findOne({ action: 'ATTEMPT_STARTED', 'details.attemptId': id });
+    assert.ok(startAudit?.ip);
+    assert.notEqual(startAudit.ip, '198.51.100.46', 'a direct client cannot set its audit IP through X-Forwarded-For');
     await studentAgent.put(`/api/attempts/${id}/answers/${questionId}`).set('x-csrf-token', csrfStudent)
       .send({ selectedOptionId: 'a' }).expect(200);
     await Attempt.updateOne({ _id: id }, { $set: { endsAt: new Date(Date.now() - 1000) } });
@@ -327,7 +335,7 @@ describe('SRS-aligned exam workflow', () => {
       submittedAt: persisted.submittedAt.toISOString(),
     };
     assert.equal(await AuditLog.countDocuments({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id }), 1);
-    assert.equal((await AuditLog.findOne({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id })).ip, '198.51.100.46');
+    assert.equal((await AuditLog.findOne({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id })).ip, startAudit.ip);
 
     const response = await studentAgent.post(`/api/attempts/${id}/submit`)
       .set('x-csrf-token', csrfStudent).expect(200);
@@ -348,6 +356,9 @@ describe('SRS-aligned exam workflow', () => {
     const missingId = new mongoose.Types.ObjectId();
     await studentAgent.post(`/api/attempts/${missingId}/submit`).set('x-csrf-token', csrfStudent)
       .expect(404).expect(({ body }) => assert.equal(body.error.code, 'ATTEMPT_NOT_FOUND'));
+    } finally {
+      app.set('trust proxy', priorTrustProxy);
+    }
   });
   it('records null rather than inventing an IP when an automatic submission has no captured request IP', async () => {
     const exam = await Exam.create({ ownerId: instructor._id, title: 'No request IP', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
@@ -360,8 +371,15 @@ describe('SRS-aligned exam workflow', () => {
   });
   it('recovers a finalized attempt audit after a transient audit-store failure', async () => {
     const exam = await Exam.create({ ownerId: instructor._id, title: 'Audit recovery', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
+    // As above, use the direct socket peer in this no-proxy test and reject spoofed XFF.
+    const priorTrustProxy = app.get('trust proxy');
+    app.set('trust proxy', false);
+    try {
     const started = await studentAgent.post(`/api/exams/${exam.id}/attempts`).set('x-csrf-token', csrfStudent).set('x-forwarded-for', '198.51.100.48').expect(201);
     const id = started.body.attempt.id;
+    const startAudit = await AuditLog.findOne({ action: 'ATTEMPT_STARTED', 'details.attemptId': id });
+    assert.ok(startAudit?.ip);
+    assert.notEqual(startAudit.ip, '198.51.100.48', 'a direct client cannot set its audit IP through X-Forwarded-For');
     await studentAgent.put(`/api/attempts/${id}/answers/${questionId}`).set('x-csrf-token', csrfStudent)
       .send({ selectedOptionId: 'a' }).expect(200);
     await Attempt.updateOne({ _id: id }, { $set: { endsAt: new Date(Date.now() - 1000) } });
@@ -395,13 +413,16 @@ describe('SRS-aligned exam workflow', () => {
     assert.equal(recovered.submittedAt.getTime(), firstFinalization.submittedAt.getTime());
     assert.equal(recovered.submissionAuditPending, false);
     assert.equal(await AuditLog.countDocuments({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id }), 1);
-    assert.equal((await AuditLog.findOne({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id })).ip, '198.51.100.48');
+    assert.equal((await AuditLog.findOne({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id })).ip, startAudit.ip);
 
     // Simulate a crash after the audit insert but before clearing the outbox marker.
     await Attempt.updateOne({ _id: id }, { $set: { submissionAuditPending: true } });
     await submitExpiredAttempts();
     assert.equal((await Attempt.findById(id)).submissionAuditPending, false);
     assert.equal(await AuditLog.countDocuments({ action: 'ATTEMPT_SUBMITTED', 'details.attemptId': id }), 1);
+    } finally {
+      app.set('trust proxy', priorTrustProxy);
+    }
   });
   it('finalizes an expired attempt before rejecting a late answer change', async () => {
     const exam = await Exam.create({ ownerId: instructor._id, title: 'Late answer timeout', durationMinutes: 1, startAt: new Date(Date.now() - 60_000), endAt: new Date(Date.now() + 600_000), passMark: 2, questionIds: [questionId], assignedStudentIds: [student._id], status: 'Published' });
