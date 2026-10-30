@@ -21,6 +21,7 @@
     "demo": "concurrently -k -n api,web -c cyan,magenta \"npm:demo:api\" \"npm:dev:web\"",
     "demo:api": "npm --workspace server run demo",
     "test": "npm --workspace server test && npm --workspace client test",
+    "coverage": "npm --workspace server run coverage && npm --workspace client run coverage",
     "build": "npm --workspace server run check && npm --workspace client run build",
     "check:a11y": "node tools/a11y-check.mjs"
   }

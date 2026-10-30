@@ -7,6 +7,7 @@
     "dev": "node --watch src/index.js",
     "demo": "node src/demo.js",
     "test": "node --test --test-concurrency=1",
+    "coverage": "node --test --test-concurrency=1 --experimental-test-coverage --test-coverage-include=src/**/*.js --test-coverage-lines=70",
     "check": "node --check src/index.js && node --check src/app.js && node --check src/ops/cli.js",
     "backup": "node src/ops/cli.js backup",
     "restore": "node src/ops/cli.js restore",
