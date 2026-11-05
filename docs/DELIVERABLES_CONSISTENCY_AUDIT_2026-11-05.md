@@ -3,8 +3,8 @@
 ## Verified GitHub state
 
 - Canonical repository: [SE-Team-06/online-exam-portal-se-miniproject](https://github.com/SE-Team-06/online-exam-portal-se-miniproject).
-- Current main head: `9b4bd506d74d01183e88693be86e52c15f57ccd8`.
-- PR #66 is merged. Its head was created by `chhavi2308-s`; PR workflow run #89 completed successfully for locked install, automated tests, syntax checks, and build. No post-merge Actions run was returned for the current main commit.
+- Current main head: `95dbeb5d2fc7e56f93f9d156c7880849aa9b6121` (PR #68 merge).
+- PR #66 and PR #68 are merged. PR #68 Actions run #91 passed; the post-merge `main` run [#42079749560](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/42079749560) completed successfully on `95dbeb5d2fc7e56f93f9d156c7880849aa9b6121` (the `checks` job is green).
 - GitHub issue search returned no open issues before this audit. Issue #67 is now the only open issue and is assigned to `chhavi2308-s`; it tracks remaining Part 3 acceptance evidence. Issues #1–#5 and #18 remain closed.
 - The connected account `chhavi2308-s` has repository admin access. GitHub reports the account `codex` has read permission. No collaborator permissions were changed.
 
@@ -24,9 +24,9 @@ The ATM content in the supplied STP and SAD templates is sample material, not On
 
 | Requirement | Evidence | Status / gap |
 |---|---|---|
-| GitHub Project linked to repository; backlog, story points, assignments, and two sprint plans | GitHub issue search and repository tools do not expose current Projects v2 views/fields. | UNVERIFIED. Check the organization Project directly for repo linkage, backlog, estimates, assignees, sprint dates/status, Done states, and linked PRs. |
+| GitHub Project linked to repository; backlog, story points, assignments, and two sprint plans | Read-only inspection of organization Project View 7 shows #1, #3, and #18 as Done in Sprint 2 with their expected merged PRs. | PARTIAL: those rows and linked PRs are verified; full repository linkage, backlog/estimate completeness, and all sprint fields were not verified. |
 | PR and CI workflow | CI run #89 passed for PR #66; the PR is merged. | VERIFIED for that PR. Repository-owner review records should be checked separately before claiming independent review. |
-| Sprint demonstration videos | `SE miniproject.mp4` and `Sprint2_Demo.mp4` exist in the repository. Earlier handover metadata records durations near 1:15 and 1:55. | FILES PRESENT; playback/content and coverage of the required working flows were not verified in this audit. |
+| Sprint demonstration videos | `SE miniproject.mp4` and `Sprint2_Demo.mp4` exist; MP4 metadata reports 74.63s and 115.04s, respectively. | DURATIONS VERIFIED; video contents and required workflow coverage still need human review. |
 | Sprint schedule and freeze | Part 2 schedules Sprint 1 for 19–23 Oct and Sprint 2 for 26–30 Oct 2026, then requires documentation completion and development freeze. | Dates have elapsed. Do not report current sprint work or velocity without a Jira/Project readback. |
 
 ## Part 3 — Test evidence
@@ -43,3 +43,12 @@ The ATM content in the supplied STP and SAD templates is sample material, not On
 ## Chhavi’s remaining follow-up
 
 Issue #67 is assigned to `chhavi2308-s` and tracks staging mail, browser acceptance, load/availability, deployment controls, Project board reconciliation, video review, and updated test evidence. Keep the existing closed implementation issues closed unless a reproducible implementation defect is found. Do not add or change collaborators without an exact account and agreed access level.
+
+## Post-merge follow-up — 5 November 2026
+
+- Current `main` is `95dbeb5d2fc7e56f93f9d156c7880849aa9b6121`; post-merge Actions run [#42079749560](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/42079749560) completed successfully. The CI job result is success.
+- Local verification on the documentation checkout: `npm run build` passed (server syntax checks and Vite production build); client tests passed 17/17.
+- The local full `npm test` attempt did not pass: MongoDB Memory Server rejected its downloaded MongoDB 8.2.6 binary due to an MD5 mismatch. Integrity verification was kept enabled. An isolated-cache retry downloaded the archive but did not complete startup/test execution; no local server test result is claimed. Earlier recorded full-suite evidence is 188/188 (171 server, 17 client), and the latest main CI workflow is green.
+- Project View 7 visibly shows the #1 row with PRs #60/#63/#64/#65, #3 row with PRs #60/#63/#64/#65, and #18 row with PR #35; all three rows are Done in Sprint 2. Whole-board/repository-linkage reconciliation remains unverified.
+- Sprint video container metadata: `SE miniproject.mp4` 74.63 seconds; `Sprint2_Demo.mp4` 115.04 seconds. Their actual content has not been reviewed.
+- Still blocked/unverified: real staging SMTP delivery, full student/instructor browser walkthrough, SRS-scale load/availability measurements or approved deviation, target deployment security/backup review, and video content review. Issue #67 remains open for these items and for final test-documentation reconciliation.
