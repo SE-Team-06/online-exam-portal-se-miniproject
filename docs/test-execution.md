@@ -122,3 +122,23 @@ Startup smoke check: `npm run demo` launched the API and Vite UI; `GET /api/heal
 | TC-LOCAL-012 | FR-OE-022 | Verify negative scoring floors at zero and unanswered items do not earn marks. | Pure scoring unit tests with synthetic answer selections. | Wrong score does not become negative; unanswered count is correct. | Passed: floor 0 and unanswered count 2. |
 
 These are added implementation tests, not retroactive actual-results fields in the approved STP. The original STP still has its own ten planned test cases; do not mark its cases as passed based only on this local mapping. Requirements beyond the tested slice remain unverified. The login rate limiter is configured for 10 requests per IP per minute to match SEC-OE-010, but a 429/window behavior test has not yet been added.
+
+## Part 3 rerun — 4 November 2026
+
+A focused Part 3 report was added at [PART3_TEST_REPORTS_2026-11-04.md](PART3_TEST_REPORTS_2026-11-04.md). The client suite passed **17/17**; the server SMTP-configuration and scoring tests passed **8/8**; server syntax checks and the production build passed. The full server suite and full server coverage remain **blocked** because MongoDB Memory Server rejected its downloaded binary on MD5 mismatch. The integrity check was not bypassed. Client line/branch/function coverage was **100.00% / 97.44% / 100.00%**; partial server line/branch/function coverage was **43.68% / 94.74% / 23.86%** and is not full-suite acceptance evidence. Staging SMTP delivery, deployed browser validation, and a GitHub Actions run for this documentation branch were not performed.
+
+## Part 3 CI confirmation — 4 November 2026
+
+Live GitHub main is 5cbd275ae0510bdc0dde17704a54ffda43359f37. Actions run [#88](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/41464890786) completed successfully on 2 November: locked install, **171/171 server tests**, **17/17 client tests**, syntax checks and production build. Its source tree (3a718e0719c0f7695ab42b21cf2bf6d50940ac26) matches this local report branch's tree. A local fetch attempt failed because github.com was unreachable, but the GitHub API confirmed the current main SHA and Actions logs. The local server test/coverage run remains blocked by the Windows MongoDB binary checksum mismatch; the CI result is the full-suite acceptance evidence for this same tree.
+
+## Part 3 final local verification — 4 November 2026
+
+After downloading MongoDB 8.2.6 into a fresh temporary directory and accepting its normal checksum verification, the full root npm test passed **188/188** (171 server, 17 client). The server coverage command passed **171/171** and reported **94.08% line, 79.96% branch, and 96.45% function coverage**; client coverage was **100.00% / 97.44% / 100.00%**. The server syntax checks and Vite production build passed. The latest live-main GitHub Actions run #88 passed the same 171/17 tests, locked install, syntax checks and production build on the identical source tree.
+
+A final local npm ci attempt was blocked by Windows EPERM unlinking the Rolldown native binding; tracked manifests and lockfiles did not change. The optional browser accessibility check could not run because the root Playwright package is absent in this checkout. Actual staging SMTP delivery and deployed/browser acceptance are still not evidenced.
+
+### Part 3 follow-up verification — 4 November 2026
+
+After the earlier temporary MongoDB checksum issue, a fresh MongoDB 8.2.6 binary passed its standard integrity check. `npm ci --cache <temporary-cache>` then completed successfully. The root suite passed 188/188 (171 server, 17 client); server coverage passed 171/171 with 94.08% line, 79.96% branch, and 96.45% function coverage; client coverage passed 17/17 with 100.00% line, 97.44% branch, and 100.00% function coverage. `npm run build` passed. See [Part 3 report](PART3_TEST_REPORTS_2026-11-04.md).
+
+A local Chrome accessibility smoke check passed axe and responsive checks on the login page at 1280px and 360px, then timed out waiting for the instructor dashboard (`Your exams`). The instructor/student dashboard, exam, submission-dialog keyboard, and remaining workflow checks therefore did not run. This is a failed/incomplete optional smoke check, not a passing end-to-end browser result. Staging SMTP delivery remains unverified.
