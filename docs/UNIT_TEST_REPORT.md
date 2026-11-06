@@ -25,9 +25,9 @@ The recorded automated tests cover the following areas:
 
 | Test suite | Tests passed | Result |
 |---|---:|---|
-| Server test suite | 171/171 | PASS |
+| Server test suite | 172/172 | PASS |
 | Client test suite | 17/17 | PASS |
-| **Combined automated test suite** | **188/188** | **PASS** |
+| **Combined recorded results** | **189/189** | **PASS** |
 
 The server test suite includes unit-level and application integration coverage. The client test suite verifies the recorded client-side test cases.
 
@@ -42,7 +42,7 @@ The recorded test evidence includes unit-level verification of:
 - Submission summary generation.
 - Question selection and validation.
 
-The evidence records eight passing server-side pure unit/configuration tests, alongside the broader server test suite.
+The evidence records eight passing server-side pure unit/configuration tests, alongside the broader server test suite. The server suite also verifies password-reset rate limiting: ten requests from the same IP within one minute are accepted, while the eleventh request is rejected with HTTP 429 (Too Many Requests).
 
 ## 5. Test Environment and Execution
 
@@ -61,9 +61,9 @@ The production build and server syntax checks completed successfully.
 
 <badge color="success">Automated test suites passed</badge>
 
-The recorded final automated test execution completed with 188 out of 188 tests passing:
+The recorded automated test results comprise 172 passing server tests in the latest verification and 17 passing client tests in the previously recorded verification, for a combined total of 189 passing tests.
 
-- Server: 171 passed.
+- Server: 172 passed.
 - Client: 17 passed.
 
 The results demonstrate that the tested application components and automated workflows passed the recorded test assertions.
@@ -82,6 +82,6 @@ These activities require separate system or acceptance validation and should not
 
 ## 8. Conclusion
 
-The recorded automated test suites completed successfully, with 171 server tests and 17 client tests passing. The tested application logic and client-side functionality showed the expected behaviour under the recorded test conditions.
+The recorded automated test suites completed successfully, with 172 server tests and 17 client tests passing. The tested application logic and client-side functionality showed the expected behaviour under the recorded test conditions.
 
 Outstanding staging and browser validation activities are documented separately in the System Validation Report and test execution evidence.
