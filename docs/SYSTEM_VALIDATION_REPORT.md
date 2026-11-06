@@ -5,6 +5,7 @@
 - **Validation period:** 2–6 November 2026
 - **Repository:** `SE-Team-06/online-exam-portal-se-miniproject`
 - **Source reviewed:** `main` at `95dbeb5d2fc7e56f93f9d156c7880849aa9b6121`
+- **Latest main baseline** at report update: `f6e1573` (includes the merged Part 3 deliverables consistency audit).
 - **Report branch:** `docs/chhavi-system-validation`
 
 ## Objective and scope
@@ -32,24 +33,25 @@ A second attempt used a separate ignored directory, `.cache/system-validation-mo
 
 | ID | Scenario | Expected result | Actual result and evidence | Status |
 |---|---|---|---|---|
-| SV-01 | Open registration page and inspect client-side fields | Registration form is available and validates required fields | Not reached: the local demo/API could not start. Registration code and test coverage are present in `client/src/AuthPanel.jsx` and `server/test/auth-lifecycle.test.js`; this is implementation/test evidence, not an end-user run. | BLOCKED |
-| SV-02 | Register a synthetic student and verify mail/account activation | A unique account is created, verification mail is sent, and the link activates the account | Not run. Demo startup failed before the UI was available; no controlled SMTP transport or staging mailbox was configured. Automated lifecycle tests are recorded as passing in the Part 3 test report. | BLOCKED |
-| SV-03 | Log in as instructor and inspect role workspace | Valid seeded instructor reaches instructor workspace | Not reached because the demo database did not start. Existing automated authentication and route/RBAC evidence is in `server/test/security.test.js`; no current browser login is claimed. | BLOCKED |
-| SV-04 | Create a question; configure, publish, and assign an exam | Instructor can author a question, publish an exam, and assign it to the student | Not run: no application session was available. Relevant API and workflow tests are in `server/test/workflow.test.js`; these do not substitute for this UI walkthrough. | BLOCKED |
-| SV-05 | Log in as student, view assigned exam, start it, answer, and submit | Student sees only assigned work; timer, answer saving, confirmation, and submission operate | Not run: no application session was available. Relevant automated cases are included in `server/test/workflow.test.js` and `client/test/*.test.js`. | BLOCKED |
-| SV-06 | View submitted result as student and instructor | Student sees their result; instructor sees the submitted attempt/statistics | Not run in the browser. Automated result ownership and workflow checks are recorded in the full server suite. | BLOCKED |
-| SV-07 | Log out and request protected data without a session | Logout ends the session; unauthenticated protected requests are denied | Not manually run. Authentication, session, and authorization cases are covered by `server/test/security.test.js`; the full suite passed in the recorded CI evidence below. | IMPLEMENTED; UI CHECK BLOCKED |
-| SV-08 | Check narrow/mobile and desktop layouts | Core pages render at desktop and 360 px without horizontal overflow | On 4 November, the recorded browser smoke passed login-page accessibility and responsive checks at 1280 px and 360 px, then timed out waiting for the instructor dashboard. No current screenshots were produced; dashboard/exam responsive checks remain unverified. See `docs/PART3_TEST_REPORTS_2026-11-04.md`. | PARTIAL |
-| SV-09 | Confirm SMTP delivery and account links | Verification/reset messages arrive and links work in a staging environment | No staging service or disposable mailbox was configured. Mocked/automated mail tests do not establish real delivery. | BLOCKED / NOT VERIFIED |
+| SV-01 | Open registration page and inspect client-side fields (STP v1.2: TC-OE-001) | Registration form is available and validates required fields | Not reached: the local demo/API could not start. Registration code and test coverage are present in `client/src/AuthPanel.jsx` and `server/test/auth-lifecycle.test.js`; this is implementation/test evidence, not an end-user run. | BLOCKED |
+| SV-02 | Register a synthetic student and verify mail/account activation (STP v1.2: TC-OE-001) | A unique account is created, verification mail is sent, and the link activates the account | Not run. Demo startup failed before the UI was available; no controlled SMTP transport or staging mailbox was configured. Automated lifecycle tests are recorded as passing in the Part 3 test report. | BLOCKED |
+| SV-03 | Log in as instructor and inspect role workspace (STP v1.2: TC-OE-001, TC-OE-003) | Valid seeded instructor reaches instructor workspace | Not reached because the demo database did not start. Existing automated authentication and route/RBAC evidence is in `server/test/security.test.js`; no current browser login is claimed. | BLOCKED |
+| SV-04 | Create a question; configure, publish, and assign an exam (STP v1.2: TC-OE-004, TC-OE-005) | Instructor can author a question, publish an exam, and assign it to the student | Not run: no application session was available. Relevant API and workflow tests are in `server/test/workflow.test.js`; these do not substitute for this UI walkthrough. | BLOCKED |
+| SV-05 | Log in as student, view assigned exam, start it, answer, and submit (STP v1.2: TC-OE-005, TC-OE-006, TC-OE-007, TC-OE-008) | Student sees only assigned work; timer, answer saving, confirmation, and submission operate | Not run: no application session was available. Relevant automated cases are included in `server/test/workflow.test.js` and `client/test/*.test.js`. | BLOCKED |
+| SV-06 | View submitted result as student and instructor (STP v1.2: TC-OE-008, TC-OE-009) | Student sees their result; instructor sees the submitted attempt/statistics | Not run in the browser. Automated result ownership and workflow checks are recorded in the full server suite. | BLOCKED |
+| SV-07 | Log out and request protected data without a session (STP v1.2: TC-OE-001, TC-OE-003) | Logout ends the session; unauthenticated protected requests are denied | Not manually run. Authentication, session, and authorization cases are covered by `server/test/security.test.js`; the full suite passed in the recorded CI evidence below. | IMPLEMENTED; UI CHECK BLOCKED |
+| SV-08 | Check narrow/mobile and desktop layouts (STP v1.2: Section 5 – Accessibility and usability requirements) | Core pages render at desktop and 360 px without horizontal overflow | On 4 November, the recorded browser smoke passed login-page accessibility and responsive checks at 1280 px and 360 px, then timed out waiting for the instructor dashboard. No current screenshots were produced; dashboard/exam responsive checks remain unverified. See `docs/PART3_TEST_REPORTS_2026-11-04.md`. | PARTIAL |
+| SV-09 | Confirm SMTP delivery and account links (STP v1.2: TC-OE-001, TC-OE-002) | Verification/reset messages arrive and links work in a staging environment | No staging service or disposable mailbox was configured. Mocked/automated mail tests do not establish real delivery. | BLOCKED / NOT VERIFIED |
+
 
 ## Automated evidence reviewed
 
 The Part 3 test report records a full run against the same server/client code now on `main` (the later PRs did not change those code paths):
 
-- Server tests: **171 passed, 0 failed, 0 skipped**.
+- Server tests: **172 passed, 0 failed, 0 skipped**.
 - Client tests: **17 passed, 0 failed, 0 skipped**.
 - Production build and server syntax checks: **passed**.
-- GitHub Actions run [#88](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/41464890786): recorded as successful for the matching source tree.
+- GitHub Actions run [#97](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/42204073835): successful on commit `a841a6dc78a45946c0a60944b65d47a80fbd8fda`. This run provides the latest CI evidence for the server test suite (172 tests passed). The 17 client tests are from a separate earlier verification; the two results should not be interpreted as one combined CI execution.
 - Automated coverage includes account lifecycle, authentication/RBAC, question/exam workflows, deadline submission, result access, and client form/timer behavior. Exact test-file mapping is in `docs/PART3_TEST_REPORTS_2026-11-04.md`.
 
 These results establish automated test evidence only. They do not establish that a human completed the instructor or student UI flows, that staging SMTP delivered mail, or that the current Windows demo can start.
