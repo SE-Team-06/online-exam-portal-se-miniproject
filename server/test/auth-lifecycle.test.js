@@ -125,4 +125,21 @@ describe('registration, verification, and password reset (FR-OE-001, FR-OE-002, 
       if (previousRequireHttps === undefined) delete process.env.REQUIRE_HTTPS; else process.env.REQUIRE_HTTPS = previousRequireHttps;
     }
   });
+  it('returns 429 after ten password-reset requests from the same IP in one minute', async () => {
+    const ip = '198.51.100.250';
+
+    for (let i = 0; i < 10; i += 1) {
+      await request(app)
+        .post('/api/auth/password-reset')
+        .set('x-forwarded-for', ip)
+        .send({ email: 'unknown@auth.test' })
+        .expect(202);
+    }
+
+    await request(app)
+      .post('/api/auth/password-reset')
+      .set('x-forwarded-for', ip)
+      .send({ email: 'unknown@auth.test' })
+      .expect(429);
+  });
 });
