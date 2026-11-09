@@ -6,7 +6,7 @@ This record covers the follow-up execution performed on 9 November 2026. It is s
 
 ## Environment
 
-- Windows 11 (build 26200), PowerShell
+- Windows 10 Home Single Language, Version 25H2 (build 26200), PowerShell
 - Node.js v26.13.0; npm 11.20.0
 - MongoDB Memory Server binary: MongoDB 8.2.6; integrity verification remained enabled
 - No staging SMTP variables or disposable mailbox were configured
