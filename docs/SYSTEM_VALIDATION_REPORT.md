@@ -68,23 +68,52 @@ This follow-up used a clean clone of the then-current `main` at `8727d94aa7ac88b
 | Clean lockfile install (`npm.cmd ci`) | Failed on Windows with `EPERM` while npm attempted to create the `server` workspace symlink under root `node_modules`. No lockfile, manifest, or security setting was changed. Dependencies were then installed separately in each workspace without writing lockfiles so checks could continue. | BLOCKED (standard clean install) |
 | Complete automated tests (`npm.cmd test`) | Server suite: 172/172 passed; client suite: 17/17 passed. The root script ran the server and client suites sequentially as separate executions. The exact commands, install workaround, and results are recorded in [`evidence/system-validation-2026-11-09.md`](evidence/system-validation-2026-11-09.md). | PASS (local automated tests) |
 | Server syntax and production frontend build (`npm.cmd run build`) | Server `node --check` checks passed; Vite production build passed. | PASS |
-| MongoDB/API/frontend startup | With process-local `TEMP`/`TMP` redirected away from the sandbox temp path, the demo log reported MongoDB-backed API startup and Vite ready on port 5173. Independent HTTP requests from the validation process and the in-app browser then timed out connecting to `127.0.0.1`; a usable browser session could not be established. | PARTIAL; browser access BLOCKED |
-| End-user browser scenarios and screenshots | No registration, login, instructor, student, result, logout, desktop/mobile, or protected-route workflow was completed in the browser. No successful-workflow screenshots were captured. | BLOCKED / NOT VERIFIED |
+| MongoDB/API/frontend startup | A fresh same-shell probe with process-local `TEMP`/`TMP` set to a normal workspace path reported Vite ready. The API then exited with `MongooseServerSelectionError: connect EACCES 127.0.0.1:63110` while connecting to the temporary MongoDB port (npm lifecycle exit code 1); the demo launcher terminated Vite. No TCP listeners remained. Same-shell requests to frontend/API via `127.0.0.1`, `localhost`, and `[::1]` failed with curl exit 7 (connection refused). Before the probe, there were no listeners on 4000, 5173, or 27017. | BLOCKED by execution environment |
+| End-user browser scenarios and screenshots | No registration, login, instructor, student, result, logout, desktop/mobile, or protected-route workflow was completed in the browser. The in-app browser separately returned `ERR_CONNECTION_TIMED_OUT`; launching an interactive terminal through the computer-use host was blocked/timed out. No successful-workflow screenshots were captured. | BLOCKED / NOT VERIFIED |
 | SMTP delivery | No staging SMTP configuration or disposable mailbox was available. | BLOCKED / NOT VERIFIED |
 | Performance, load, availability, and deployment targets (STP v1.2: TC-OE-010) | No controlled load/availability or deployed-environment measurements were run as part of this system-validation follow-up. | NOT VERIFIED |
 
-The automated tests and build ran against the latest-main clone after the workspace-local install workaround; they were not reruns of the earlier 2–6 November browser checks. The test suites do not substitute for end-user system validation. No code or configuration fix was made for the demo connection timeout because the available evidence does not distinguish an application defect from this environment's process/network isolation.
+The automated tests and build ran against the latest-main clone after the workspace-local install workaround; they were not reruns of the earlier 2–6 November browser checks. The test suites do not substitute for end-user system validation. The same-shell `EACCES` and refused connections are consistent with loopback socket restrictions in the Codex execution sandbox. The Windows firewall state could not be read from this environment, so a host firewall restriction cannot be independently ruled out. No firewall or security settings were changed, and no application code was changed to mask the environment failure.
+
+## Manual completion procedure
+
+Run the following in a normal interactive Windows PowerShell session on the laptop (outside the Codex execution sandbox), from this PR branch checkout. If the demo starts and reports Vite ready, leave this terminal open and use Chrome on the same Windows host at `http://127.0.0.1:5173/`:
+
+```powershell
+Set-Location "C:\Users\Chhavi\Documents\Codex\2026-10-22\https-github-com-se-team-06\oep-system-validation-p1"
+git status --short --branch
+$env:TEMP = Join-Path $PWD ".cache\p1-mongo-process-tmp"
+$env:TMP = $env:TEMP
+$env:MONGOMS_DOWNLOAD_DIR = Join-Path $PWD ".cache\p1-mongodb-binaries"
+New-Item -ItemType Directory -Force -Path $env:TEMP, $env:MONGOMS_DOWNLOAD_DIR | Out-Null
+$listeners = Get-NetTCPConnection -State Listen -LocalPort 4000,5173 -ErrorAction SilentlyContinue
+if ($listeners) { $listeners | Select-Object LocalAddress,LocalPort,OwningProcess }
+npm.cmd run demo
+```
+
+The demo prints a newly generated password for both synthetic seeded accounts. Use it only on the local laptop; do not include it in screenshots or shared logs. Open Chrome at `http://127.0.0.1:5173/` (the API and Vite default to IPv4 loopback). Keep the terminal open while testing; press Ctrl+C afterward to discard the temporary database. Do not disable Windows Firewall. If the API still reports `EACCES`, capture the redacted error and stop; do not change firewall policy or bypass MongoDB integrity checks.
+
+After the demo is reachable, record each scenario separately with date/time, browser viewport, observed result, STP case, and a genuine screenshot with no password/token visible:
+
+1. **TC-OE-001:** inspect registration required-field validation and sign in with each seeded role; test an invalid password; sign out and verify a protected API route rejects the unauthenticated session. Successful email verification requires staging SMTP and remains NOT VERIFIED without it.
+2. **TC-OE-003:** confirm Student cannot access instructor-only operations; sign back in as Instructor and confirm instructor workspace access. The demo does not seed an Administrator.
+3. **TC-OE-004/005:** create a multiple-choice question, configure an exam with future close time and selected question, assign the seeded verified student, and publish it.
+4. **TC-OE-005/006/007/008:** sign in as Student, confirm the assignment appears, start it, select an answer (the UI saves answers as selected), verify the timer, and submit through the confirmation dialog.
+5. **TC-OE-008/009:** verify the student result, sign out, sign in as Instructor, and verify the submitted attempt/statistics.
+6. **TC-OE-005/006:** inspect the same reachable login and exam pages at desktop width and approximately 360 px; note overflow, clipped controls, and browser console/network errors.
+
+Mark only observed interactions PASS. Leave scenarios BLOCKED or NOT VERIFIED if the UI, SMTP, or required environment was unavailable. Store screenshots under `docs/evidence/system-validation-2026-11-09/` or the applicable new-date folder; do not use screenshots from the earlier report as evidence of a new run.
 
 ## Screenshots and evidence
 
-No screenshots of a working end-user workflow were captured for this report. The 9 November demo printed startup-ready messages, but the local browser and independent HTTP checks timed out before a workflow could be exercised. Do not present login mockups, source code, or the failed connection attempt as a successful product demonstration. The earlier login-only smoke result and its limitations are documented in `docs/PART3_TEST_REPORTS_2026-11-04.md`; broader historical browser/accessibility evidence is in `docs/ACCESSIBILITY_BROWSER_REPORT.md` and is dated 26 October, outside this report's validation period.
+No screenshots of a working end-user workflow were captured for this report. Although Vite printed a ready message, the fresh same-shell probe found no listener; the API failed its MongoDB loopback connection with `EACCES`, and HTTP requests were refused. The local browser could not reach the isolated execution environment. Do not present login mockups, source code, or startup messages as a successful product demonstration. The earlier login-only smoke result and its limitations are documented in `docs/PART3_TEST_REPORTS_2026-11-04.md`; broader historical browser/accessibility evidence is in `docs/ACCESSIBILITY_BROWSER_REPORT.md` and is dated 26 October, outside this report's validation period.
 
 ## Defects, limitations, and follow-up
 
-The historical blocker was MongoDB Memory Server startup on this Windows host: the pre-existing archive failed MD5 verification, while a separate freshly downloaded archive reached `mongod` startup but failed with an internal `fassert()` error. During the 9 November follow-up, moving MongoDB temporary files away from the sandbox `#!sandbox` temp path allowed the demo to print MongoDB/API and Vite startup-ready messages; requests from the separate browser/tool context still timed out. Thus an end-user browser workflow remains unverified, and the timeout cannot be attributed conclusively to product code.
+The historical blocker was MongoDB Memory Server startup on this Windows host: the pre-existing archive failed MD5 verification, while a separate freshly downloaded archive reached `mongod` startup but failed with an internal `fassert()` error. On 9 November, moving temporary files away from the sandbox `#!sandbox` path let Vite report ready, but MongoDB-to-API loopback returned `EACCES`; the API exited and no frontend listener remained. IPv4, `localhost`, and IPv6 requests from the same shell were refused, and the separate in-app browser timed out. These observations point to execution-environment loopback restrictions; host firewall state was not readable here. Actual Windows-host browser acceptance remains unverified.
 
 To complete the blocked UI evidence, run the demo on a machine/environment where the official MongoDB 8.2.6 binary starts successfully (or use an approved persistent MongoDB instance with disposable data), then record actual results and screenshots for each blocked scenario. Use only a synthetic student and instructor. Keep SMTP delivery marked unverified until a staging service and disposable mailbox are tested.
 
 ## Conclusion
 
-**PARTIAL.** On 9 November, all 172 server tests and 17 client tests passed, and server syntax checks plus the production build passed. The demo reached startup-ready log messages after using a safe process-local temporary directory, but the app remained unreachable from the browser/tool context, so no end-user workflow completed and no successful-workflow screenshots exist. The standard `npm ci` workspace-symlink failure, browser reachability, staging SMTP, and broader manual acceptance remain unresolved. The historical 2–6 November results are retained as historical evidence and are not represented as repeated on the latest baseline.
+**PARTIAL.** On 9 November, all 172 server tests and 17 client tests passed, and server syntax checks plus the production build passed. In the bounded same-shell demo probe, MongoDB-to-API loopback failed with `EACCES`, no HTTP listeners remained, and the isolated browser could not reach the app; zero browser workflows and zero successful-workflow screenshots were recorded. The standard `npm ci` workspace-symlink failure, host-side browser reachability, staging SMTP, and manual acceptance remain unresolved. Follow the PowerShell procedure above on the laptop's normal interactive desktop and append evidence only after observing actual results. Historical 2–6 November results remain unchanged and are not represented as rerun on the latest baseline.
