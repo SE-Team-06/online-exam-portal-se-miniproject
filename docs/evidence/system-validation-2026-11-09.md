@@ -31,6 +31,8 @@ Command: `npm.cmd run build`
 
 The test output was captured in the ignored local file `.cache/p1-npm-test-final.log`; build output was captured in `.cache/p1-build.log`. The committed summary here excludes local caches and credentials.
 
+The subsequent PR #72 CI run [#112](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/42765015665) passed on PR head `2dc9756e3fbf7faf9f98347fafc102a197f8fad8`. The post-merge `main` run [42765267696](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/42765267696) also passed on merge commit `886df98c607a92cbb74a0a107a400219a14bb3fa`, including locked dependency installation, automated tests, API syntax and frontend build. These runs predate the additional 10 November screenshots in this local follow-up.
+
 ## Demo and browser attempt
 
 ### Same-shell launch and socket diagnostics — Codex sandbox, 9 November
@@ -47,7 +49,7 @@ These results show that the Codex execution environment denies or cannot retain 
 
 ## User-run manual browser evidence — 9–10 November 2026
 
-The attached evidence ZIP passed CRC validation and contains 13 PNGs plus a summary and manifest. All 13 screenshots were visually inspected and copied byte-for-byte to the repository's dated screenshot directories. The original manifest is represented by the repository-relative [evidence manifest](system-validation-p1-manual-manifest.csv).
+The first evidence ZIP passed CRC validation and contributed screenshots 01–13. The additional ZIP contained six PNGs, a manifest and a short handoff note; all six images opened, were visually inspected and were copied byte-for-byte into the 10 November folder. The consolidated repository-relative [evidence manifest](system-validation-p1-manual-manifest.csv) now indexes all 19 screenshots with expected and actual outcomes, status, STP case and limitations.
 
 ### 9 November desktop browser evidence
 
@@ -67,20 +69,26 @@ The attached evidence ZIP passed CRC validation and contains 13 PNGs plus a summ
 - Restored answer at 360 px: [11](system-validation-2026-11-10/screenshots/11-mobile-restored-answer-360px.png) — answer 200 is selected; user reports it remained selected after refresh.
 - Passed result at 360 px: [12](system-validation-2026-11-10/screenshots/12-mobile-submitted-pass-result-360px.png) — 1/1 Passed.
 - Registration required-field prompt at 360 px: [13](system-validation-2026-11-10/screenshots/13-mobile-registration-required-field.png).
+- Submission confirmation: [14](system-validation-2026-11-10/screenshots/14-submit-confirmation.png) — the warning that answers cannot be changed, Go back and Submit exam choices, selected answer and timer are visible. This shows the dialog, not that the final Submit exam option was clicked.
+- Student role restriction: [15](system-validation-2026-11-10/screenshots/15-student-role-restriction-403.png) — while signed in as Demo Student, `GET /api/questions` returned 403.
+- Logout/session invalidation: [16](system-validation-2026-11-10/screenshots/16-logout-session-401.png) — sign-in page shown after sign-out and `/api/auth/me` returned 401.
+- Invalid login: [17](system-validation-2026-11-10/screenshots/17-invalid-login-401.png) — synthetic Student login returned 401 and the generic authentication error; password is masked.
+- Password-reset request: [18](system-validation-2026-11-10/screenshots/18-password-reset-request.png) — generic acknowledgement shown at 360 px. This does not prove mail delivery or successful reset.
+- Registration submission error: [19](system-validation-2026-11-10/screenshots/19-registration-email-503.png) — synthetic registration POST returned 503 and the UI displayed its email-send error. No specific cause is established by this screenshot.
 
 ### User-reported console outcomes and limitations
 
-- The supplied handoff summary reports `GET /api/questions` returned HTTP 403 while signed in as Student and `GET /api/auth/me` returned HTTP 401 after sign-out with no authenticated role. These outcomes are recorded as user-reported text; screenshots of those exact commands/output were not included.
-- The user reports seeing the submit-confirmation dialog, but no dialog screenshot was supplied. The 9 November 0/1 and 10 November 1/1 results are separate runs; the demo's in-memory data must not be presented as one continuous session.
-- Visible desktop/mobile surfaces are evidenced, but no exhaustive full-page overflow, browser compatibility, keyboard/screen-reader, or performance audit was done.
-- Full new-account registration/verification, password reset, real SMTP delivery, timer continuity after refresh, and STP TC-OE-010 performance/availability targets remain NOT VERIFIED. Keep SMTP BLOCKED.
+- The user reports testing timer continuity through a refresh and checking additional active-exam controls and Instructor views at approximately 360 px without horizontal scrolling. These are user-reported observations; no paired timer captures or dedicated Instructor-mobile screenshot were included.
+- The 9 November 0/1 and 10 November 1/1 results are different runs; the demo's in-memory data must not be presented as one continuous session.
+- The screenshots show tested portions, not an exhaustive full-page overflow, keyboard, screen-reader, browser compatibility or performance audit.
+- Successful registration/email verification, real SMTP delivery, completed password reset and TC-OE-010 performance/availability targets remain unverified. Keep SMTP BLOCKED. The observed registration 503 does not by itself identify whether SMTP credentials, service reachability, or another cause failed.
 
-The screenshots contain synthetic `example.test` accounts; the password field in the failed-login capture is masked. No token, cookie, password, real student record, or staging credential is included. Screenshots are originals, not edited or composited. Their repo-relative paths and individual observations are listed in the [manual evidence manifest](system-validation-p1-manual-manifest.csv).
+The screenshots contain synthetic `example.test` accounts; all visible password fields are masked. No token, cookie, real student record, or staging credential is included. The images include ordinary browser tab titles but no visible private messages. Screenshots are originals, not edited or composited. Their repo-relative paths and individual observations are listed in the [manual evidence manifest](system-validation-p1-manual-manifest.csv).
 
 ## External verification
 
 - Real verification/reset email delivery: **BLOCKED**; no staging SMTP service or disposable mailbox was configured.
-- User-run manual browser checks: **PARTIAL**; screenshots now evidence the scenarios above. The sandbox itself still could not reach the app, and screenshot/summary evidence does not establish every end-to-end acceptance criterion.
+- User-run manual browser checks: **PARTIAL**; 19 screenshots and qualified user observations evidence the scenarios above. The sandbox itself still could not reach the app, and the evidence does not establish every end-to-end acceptance criterion.
 - Full SRS acceptance: **NOT VERIFIED**; automated suite success is not a substitute for manual acceptance.
 
-The following remain **NOT VERIFIED**: full new-account registration and email verification, password reset, actual staging SMTP delivery, timer continuity through refresh, a screenshot of the submission-confirmation dialog, complete desktop/mobile overflow and accessibility checks, and STP TC-OE-010 performance/availability targets. The 403 role-denial and post-logout 401 are user-reported console outcomes rather than screenshot evidence. These limitations are also itemized in `docs/SYSTEM_VALIDATION_REPORT.md`.
+The following remain **BLOCKED or NOT VERIFIED**: successful registration/email verification (the observed registration request returned 503), actual staging SMTP delivery, completed password reset/token expiry/reuse checks, full keyboard interaction with the submission dialog, exhaustive accessibility/device/browser checks, and STP TC-OE-010 performance/availability targets. Timer continuity and some 360 px views are user-reported without paired screenshots. The 403, post-logout 401, invalid-login 401 and submit-dialog appearance are screenshot-backed. These limitations are also itemized in `docs/SYSTEM_VALIDATION_REPORT.md`.
