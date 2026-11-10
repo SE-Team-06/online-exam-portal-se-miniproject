@@ -3,7 +3,8 @@
 - **Project:** Online Exam Portal — Software Engineering Mini-Project
 - **Owner:** Chhavi Siddarth Wadhwa (`chhavi2308-s`)
 - **Historical validation period:** 2–6 November 2026
-- **Follow-up execution:** 9 November 2026
+- **Codex-sandbox diagnostics:** 9 November 2026
+- **User-run manual browser validation:** 9–10 November 2026
 - **Repository:** `SE-Team-06/online-exam-portal-se-miniproject`
 - **Original manual-validation source:** `main` at `95dbeb5d2fc7e56f93f9d156c7880849aa9b6121` (historical attempt; not repeated on that commit)
 - **Latest main baseline reviewed for this follow-up:** `8727d94aa7ac88bcd723de98b77283a7ffe21143`
@@ -11,7 +12,7 @@
 
 ## Objective and scope
 
-This report records end-user validation of registration and login, role-based access, instructor exam preparation, student exam participation, result viewing, logout, and desktop/mobile presentation. The local application walkthrough was attempted using the disposable demo described in the README. Results below distinguish direct UI execution from automated test evidence already recorded for the same application code.
+This report preserves the 2–6 November historical attempt, the 9 November Codex-sandbox diagnostics, and the user's later manual Chrome validation on 9–10 November. The manual evidence was supplied as 13 original screenshots plus a validation summary and manifest. It is distinct from the automated tests and from the inaccessible sandbox attempt.
 
 No production or real student data was used. The demo's generated credentials were not retained in this report or in screenshots.
 
@@ -22,8 +23,8 @@ No production or real student data was used. The demo's generated credentials we
 | OS / shell | Windows, PowerShell |
 | Node.js | v26.13.0 (meets the README minimum of 22.12) |
 | npm | 11.20.0 |
-| Browser / app URL | The local UI could not be reached during this run; no user workflow was completed in a browser |
-| Demo data | Intended to use the temporary seeded instructor, student, question, and exam in `npm run demo` |
+| Browser / app URL | User-supplied manual evidence from Windows Chrome at `127.0.0.1:5173`; screenshots dated 9–10 November, including Chrome device emulation at 360×578 |
+| Demo data | Screenshots show synthetic `example.test` instructor/student accounts and temporary demo exams; screenshots from 9 and 10 November are separate observed states, not proof of one continuous in-memory database session |
 | Source freshness | Fetched `origin/main` at the SHA above. No changes to `server`, `client`, or root dependency manifests/lockfile exist between the PR #65 code baseline (`5cbd275`) and this `main`; PRs #66 and #68 add documentation. |
 
 The setup commands were based on the root README (`npm.cmd run demo`). The first attempt used the existing `.cache/mongodb-binaries` and failed MongoDB Memory Server's MD5 check: downloaded binary MD5 `d16c23a3590abc8cb66e33e39692e75b` differed from the published checkfile value `b794b99d839b73b3862972d2e170018f`. No integrity check was bypassed and the original cache was left intact.
@@ -32,7 +33,7 @@ A second attempt used a separate ignored directory, `.cache/system-validation-mo
 
 ## Scenario results
 
-The table below preserves the original 2–6 November scenario results. The separate 9 November follow-up table records what was newly verified and what remained blocked; no historical browser result is represented as rerun.
+The table below preserves the original 2–6 November scenario results. The 9 November follow-up records sandbox-only diagnostics. The user-run 9–10 November outcomes are in the separate manual-validation table below; historical results are not represented as rerun.
 
 | ID | Scenario | Expected result | Actual result and evidence | Status |
 |---|---|---|---|---|
@@ -75,45 +76,39 @@ This follow-up used a clean clone of the then-current `main` at `8727d94aa7ac88b
 
 The automated tests and build ran against the latest-main clone after the workspace-local install workaround; they were not reruns of the earlier 2–6 November browser checks. The test suites do not substitute for end-user system validation. The same-shell `EACCES` and refused connections are consistent with loopback socket restrictions in the Codex execution sandbox. The Windows firewall state could not be read from this environment, so a host firewall restriction cannot be independently ruled out. No firewall or security settings were changed, and no application code was changed to mask the environment failure.
 
-## Manual completion procedure
+## Manual browser validation — 9–10 November 2026
 
-Run the following in a normal interactive Windows PowerShell session on the laptop (outside the Codex execution sandbox), from this PR branch checkout. If the demo starts and reports Vite ready, leave this terminal open and use Chrome on the same Windows host at `http://127.0.0.1:5173/`:
+These outcomes are based on the user's supplied summary, manifest, and 13 screenshots from normal Windows Chrome. The originals are stored without image edits in the dated evidence folders; see the [manual evidence manifest](evidence/system-validation-p1-manual-manifest.csv). “PASS” is limited to the behavior shown or explicitly reported and does not mean the complete SRS or full STP passed.
 
-```powershell
-Set-Location "C:\Users\Chhavi\Documents\Codex\2026-10-22\https-github-com-se-team-06\oep-system-validation-p1"
-git status --short --branch
-$env:TEMP = Join-Path $PWD ".cache\p1-mongo-process-tmp"
-$env:TMP = $env:TEMP
-$env:MONGOMS_DOWNLOAD_DIR = Join-Path $PWD ".cache\p1-mongodb-binaries"
-New-Item -ItemType Directory -Force -Path $env:TEMP, $env:MONGOMS_DOWNLOAD_DIR | Out-Null
-$listeners = Get-NetTCPConnection -State Listen -LocalPort 4000,5173 -ErrorAction SilentlyContinue
-if ($listeners) { $listeners | Select-Object LocalAddress,LocalPort,OwningProcess }
-npm.cmd run demo
-```
-
-The demo prints a newly generated password for both synthetic seeded accounts. Use it only on the local laptop; do not include it in screenshots or shared logs. Open Chrome at `http://127.0.0.1:5173/` (the API and Vite default to IPv4 loopback). Keep the terminal open while testing; press Ctrl+C afterward to discard the temporary database. Do not disable Windows Firewall. If the API still reports `EACCES`, capture the redacted error and stop; do not change firewall policy or bypass MongoDB integrity checks.
-
-After the demo is reachable, record each scenario separately with date/time, browser viewport, observed result, STP case, and a genuine screenshot with no password/token visible:
-
-1. **TC-OE-001:** inspect registration required-field validation and sign in with each seeded role; test an invalid password; sign out and verify a protected API route rejects the unauthenticated session. Successful email verification requires staging SMTP and remains NOT VERIFIED without it.
-2. **TC-OE-003:** confirm Student cannot access instructor-only operations; sign back in as Instructor and confirm instructor workspace access. The demo does not seed an Administrator.
-3. **TC-OE-004/005:** create a multiple-choice question, configure an exam with future close time and selected question, assign the seeded verified student, and publish it.
-4. **TC-OE-005/006/007/008:** sign in as Student, confirm the assignment appears, start it, select an answer (the UI saves answers as selected), verify the timer, and submit through the confirmation dialog.
-5. **TC-OE-008/009:** verify the student result, sign out, sign in as Instructor, and verify the submitted attempt/statistics.
-6. **TC-OE-005/006:** inspect the same reachable login and exam pages at desktop width and approximately 360 px; note overflow, clipped controls, and browser console/network errors.
-
-Mark only observed interactions PASS. Leave scenarios BLOCKED or NOT VERIFIED if the UI, SMTP, or required environment was unavailable. Store screenshots under `docs/evidence/system-validation-2026-11-09/` or the applicable new-date folder; do not use screenshots from the earlier report as evidence of a new run.
+| Scenario | Expected result | Actual result and evidence | STP v1.2 | Status |
+|---|---|---|---|---|
+| Registration required-field validation | Empty required fields prevent submission and identify a required value | At 360×578, Chrome displayed “Please fill out this field” on the blank registration form. [Screenshot 13](evidence/system-validation-2026-11-10/screenshots/13-mobile-registration-required-field.png). | TC-OE-001 | PASS for browser-side required-field validation only |
+| New account registration, email verification, and activation | A synthetic account registers, receives a real verification email, and activates | Only the required-field browser prompt was tested. No completed registration/verification or staging mail delivery is evidenced. | TC-OE-001 | NOT VERIFIED; SMTP BLOCKED |
+| Invalid login response | Invalid credentials are rejected without disclosing account state | The login page showed a generic error for `instructor@example.test`; the screenshot does not establish why that attempt failed. [Screenshot 01](evidence/system-validation-2026-11-09/screenshots/01-login-failed-attempt.png). | TC-OE-001 | PARTIAL; rejection message observed, credential cause unverified |
+| Instructor authentication/workspace | Seeded Instructor signs in and sees Instructor workspace | Instructor role and dashboard are visible. [Screenshot 02](evidence/system-validation-2026-11-09/screenshots/02-instructor-dashboard.png). | TC-OE-001, TC-OE-003 | PASS for successful sign-in/workspace |
+| Student authentication/workspace | Seeded Student signs in and sees Student workspace | Student role, notifications, previous-results section, and assignments are visible. [Screenshot 04](evidence/system-validation-2026-11-09/screenshots/04-student-dashboard-assigned-exams.png). | TC-OE-001, TC-OE-003 | PASS for successful sign-in/workspace |
+| Question, exam, publication, and assignment | Instructor can prepare a question/exam, publish it, and assign the student | Screenshot 03 shows the question bank and exam form. Screenshot 07 shows a published `Question test` exam; screenshot 04 shows it assigned to the Student. The user reports creating/publishing it, but the exact save/assignment actions are not captured. [03](evidence/system-validation-2026-11-09/screenshots/03-instructor-question-bank-and-exam-form.png), [07](evidence/system-validation-2026-11-09/screenshots/07-instructor-attempt-statistics.png), [04](evidence/system-validation-2026-11-09/screenshots/04-student-dashboard-assigned-exams.png). | TC-OE-004, TC-OE-005 | PASS for visible published/assigned end state; action sequence not independently captured |
+| Student assignment visibility | Assigned exam is visible to the assigned Student | Desktop screenshot 04 shows two assignments; mobile screenshot 10 shows `Demo: HTTP Basics` and a Start exam button. [04](evidence/system-validation-2026-11-09/screenshots/04-student-dashboard-assigned-exams.png), [10](evidence/system-validation-2026-11-10/screenshots/10-mobile-student-assigned-exam-360px.png). | TC-OE-005 | PASS for visible assignment |
+| Start exam and timer display | Student starts an assigned exam and sees remaining time | The active `Demo: HTTP Basics` attempt and 04:50 countdown are visible in screenshot 05. No before/after timing evidence verifies countdown continuity. [05](evidence/system-validation-2026-11-09/screenshots/05-student-active-exam-timer.png). | TC-OE-006 | PASS for start/timer display; timer continuity NOT VERIFIED |
+| Answer save/restoration | Selected answer remains available after refresh/recovery | Screenshot 11 shows option `200` selected; the user reports this selection remained after refresh. [11](evidence/system-validation-2026-11-10/screenshots/11-mobile-restored-answer-360px.png). | TC-OE-007 | PASS based on screenshot plus user-reported refresh observation |
+| Submit confirmation and scoring | Student confirms submission and receives a calculated result | The user reports seeing the confirmation dialog; no dialog screenshot was supplied. Separate screenshots show a 0/1 failed result on 9 Nov and a 1/1 passed result on 10 Nov. These are distinct evidence sessions, not one continuous attempt. [06](evidence/system-validation-2026-11-09/screenshots/06-student-submitted-fail-result.png), [12](evidence/system-validation-2026-11-10/screenshots/12-mobile-submitted-pass-result-360px.png). | TC-OE-008, TC-OE-009 | PASS for submitted result/scoring; confirmation dialog user-reported only |
+| Instructor result visibility | Instructor can see submitted attempt/results | Instructor statistics show the Student's 0/1 attempt, “Not passed,” and two tab switches. [Screenshot 07](evidence/system-validation-2026-11-09/screenshots/07-instructor-attempt-statistics.png). | TC-OE-009 | PASS for displayed attempt/statistics |
+| Student role restriction | Student cannot call instructor-only question endpoint | Supplied handoff reports the browser console returned HTTP 403 for `GET /api/questions` as Student. No screenshot of that console output is in the ZIP. | TC-OE-003 | PASS per user-supplied console text; screenshot unavailable |
+| Logout/session restriction | Logout ends session; protected identity endpoint rejects the unauthenticated request | Supplied handoff reports HTTP 401 from `GET /api/auth/me` and `{authenticated:false,role:null}` after sign-out. No screenshot of that command/output is in the ZIP. Screenshot 08 also shows unauthenticated `/api/auth/me` 401 console entries on the login page. [Screenshot 08](evidence/system-validation-2026-11-10/screenshots/08-mobile-login-360px.png). | TC-OE-001, TC-OE-003 | PASS per user-supplied console text; direct command screenshot unavailable |
+| Desktop presentation | Desktop pages display usable content without obvious clipping | Screenshots 02–07 show the instructor, student, exam, result, and setup views at desktop size. This is visual evidence of the shown portions, not a complete full-page or cross-browser audit. | TC-OE-005, TC-OE-006 | PARTIAL |
+| Mobile presentation at 360 px | Core pages fit and controls are usable at narrow width | Chrome device emulation is set to 360×578. Screenshots 08–13 show login, dashboard, assignment, active answer, result, and registration-required prompt; no obvious horizontal overflow is visible in the captured portions. Full-page overflow, all routes, keyboard and assistive technology were not exhaustively checked. | TC-OE-005, TC-OE-006 | PASS for visible sections only; full accessibility/responsiveness PARTIAL |
+| Password reset, real SMTP, performance/load/availability | Reset and delivery links work; measured targets are met | No password-reset workflow, staging mailbox/delivery, load/availability measurement, or deployed-environment check is evidenced. | TC-OE-002, TC-OE-010 | NOT VERIFIED; SMTP BLOCKED |
 
 ## Screenshots and evidence
 
-No screenshots of a working end-user workflow were captured for this report. Although Vite printed a ready message, the fresh same-shell probe found no listener; the API failed its MongoDB loopback connection with `EACCES`, and HTTP requests were refused. The local browser could not reach the isolated execution environment. Do not present login mockups, source code, or startup messages as a successful product demonstration. The earlier login-only smoke result and its limitations are documented in `docs/PART3_TEST_REPORTS_2026-11-04.md`; broader historical browser/accessibility evidence is in `docs/ACCESSIBILITY_BROWSER_REPORT.md` and is dated 26 October, outside this report's validation period.
+The user supplied 13 genuine screenshots from later manual runs. They show the visible outcomes linked in the manual-validation table above. The 9 November sandbox probe itself still produced no reachable browser session; the later normal-Windows Chrome evidence is a separate run and does not retroactively change that result. The earlier login-only smoke result and its limitations are documented in `docs/PART3_TEST_REPORTS_2026-11-04.md`; broader historical browser/accessibility evidence is in `docs/ACCESSIBILITY_BROWSER_REPORT.md` and is dated 26 October, outside this report's validation period.
 
 ## Defects, limitations, and follow-up
 
-The historical blocker was MongoDB Memory Server startup on this Windows host: the pre-existing archive failed MD5 verification, while a separate freshly downloaded archive reached `mongod` startup but failed with an internal `fassert()` error. On 9 November, moving temporary files away from the sandbox `#!sandbox` path let Vite report ready, but MongoDB-to-API loopback returned `EACCES`; the API exited and no frontend listener remained. IPv4, `localhost`, and IPv6 requests from the same shell were refused, and the separate in-app browser timed out. These observations point to execution-environment loopback restrictions; host firewall state was not readable here. Actual Windows-host browser acceptance remains unverified.
+The historical blocker was MongoDB Memory Server startup on this Windows host: the pre-existing archive failed MD5 verification, while a separate freshly downloaded archive reached `mongod` startup but failed with an internal `fassert()` error. On 9 November, the Codex sandbox's MongoDB-to-API loopback returned `EACCES`; the API exited and no frontend listener remained. The user later supplied genuine manual Chrome evidence from a normal Windows session dated 9–10 November, so the browser workflows listed as observed are no longer blocked. Remaining gaps are successful registration/verification and reset mail, the exact submission dialog capture, timer continuity, screenshot-backed 403/401 checks, and exhaustive responsive/accessibility/performance checks.
 
 To complete the blocked UI evidence, run the demo on a machine/environment where the official MongoDB 8.2.6 binary starts successfully (or use an approved persistent MongoDB instance with disposable data), then record actual results and screenshots for each blocked scenario. Use only a synthetic student and instructor. Keep SMTP delivery marked unverified until a staging service and disposable mailbox are tested.
 
 ## Conclusion
 
-**PARTIAL.** On 9 November, all 172 server tests and 17 client tests passed, and server syntax checks plus the production build passed. In the bounded same-shell demo probe, MongoDB-to-API loopback failed with `EACCES`, no HTTP listeners remained, and the isolated browser could not reach the app; zero browser workflows and zero successful-workflow screenshots were recorded. The standard `npm ci` workspace-symlink failure, host-side browser reachability, staging SMTP, and manual acceptance remain unresolved. Follow the PowerShell procedure above on the laptop's normal interactive desktop and append evidence only after observing actual results. Historical 2–6 November results remain unchanged and are not represented as rerun on the latest baseline.
+**PARTIAL.** The historical 2–6 November attempt and the 9 November Codex-sandbox reachability failure remain documented unchanged. The user-supplied 9–10 November manual evidence now verifies login/workspaces, visible exam publication/assignment, exam start/timer display, reported answer restoration, submission/results, instructor result visibility, registration required-field validation, logout/RBAC console responses, and visible desktop/mobile sections, with the limitations in the table above. Full account registration/verification, real SMTP, password reset, timer continuity, exact submit-dialog evidence, screenshot-backed 403/401 checks, complete accessibility/responsive evaluation, and TC-OE-010 remain unverified. Full Part 1/SRS acceptance is not established.
