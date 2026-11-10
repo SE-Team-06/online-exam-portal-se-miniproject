@@ -1,5 +1,7 @@
 # Sprint 2 acceptance status — final follow-up, 30 October 2026
 
+> **Historical snapshot:** The status below records the 30 October follow-up and its then-pending candidate. The current post-merge status is appended at the end and supersedes its candidate/CI statements; the original dated record is retained for history.
+
 ## Verified baseline
 
 - Canonical repository: [SE-Team-06/online-exam-portal-se-miniproject](https://github.com/SE-Team-06/online-exam-portal-se-miniproject).
@@ -47,3 +49,28 @@ The candidate also binds the API entrypoints to loopback by default (`HOST=127.0
 3. Perform staging SMTP delivery and deployed account-link walkthrough for #1.
 4. Record staging/deployment network controls for trusted proxy and database audit permissions for #3.
 5. Keep #1 and #3 open until their acceptance evidence is attached and reviewed.
+
+## Current post-merge acceptance update — 10 November 2026
+
+This update was checked against `main` at `b2ec87d7234780d595e617f10fd1fe73b9edd7dd`. PRs #60, #63, #64, and #65 are present in `main`. The latest post-merge Actions run [42769438348](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/42769438348) succeeded on that SHA, including dependency installation, automated tests, syntax checks, and production build. Its exposed job summary does not show individual test counts; the recorded 172 server and 17 client counts are from the prior documented executions. These CI results verify automation, not staging or production behavior.
+
+### Issue #1 — registration and recovery
+
+- Registration validation, unique email enforcement, compliant password hashing, unverified-login rejection, 24-hour single-use verification tokens, and 30-minute single-use password-reset tokens are implemented. `server/test/auth-lifecycle.test.js` covers duplicates, token validation/expiry/reuse, generic reset responses, password changes, and session revocation; mocked mail-transport tests are not real SMTP delivery.
+- User-supplied P1 browser evidence shows required-field validation and the generic password-reset acknowledgement. A registration submission returned HTTP 503 with a mail-send error. The screenshot does not identify the cause. Successful activation, completed reset, and real staging email delivery remain blocked or unverified.
+- Staging mail service provisioning is an environment dependency. The issue assignment does not establish that Chhavi owns that provisioning; do not represent it as an individual code defect or claim delivery success.
+
+### Issue #3 — administrator users and audit
+
+- Admin create/list, name/password/role edits, activation/deactivation, role changes, RBAC/CSRF, self-demotion safeguards, session revocation, audit review/filtering/pagination/redaction, and application-level indefinite audit retention are implemented and covered by `server/test/admin-users.test.js`, `server/test/operations.test.js`, and `server/test/security.test.js`.
+- The admin interface keeps email read-only until an email-change verification flow exists (`client/src/AdminUsersPanel.jsx`). SRS FR-OE-006 requires account editing but does not specify email-address editing. This is a documented design limitation, not evidence that a secure email-change acceptance criterion is missing; do not add an unverified email-change mechanism solely to broaden scope.
+- Production proxy/IP trust, database operator permissions, backup safeguards, and operational retention still require target-environment evidence. Application-level TTL/index tests do not establish production operations.
+
+### Remaining evidence and ownership boundary
+
+- The P1 manual report and 19 screenshots are merged through PR #73; see [`SYSTEM_VALIDATION_REPORT.md`](SYSTEM_VALIDATION_REPORT.md). It distinguishes screenshot-backed results from user-reported actions, and keeps registration success, SMTP delivery, completed password reset, and STP TC-OE-010 performance/availability unverified.
+- Issues #2, #4, #5, and #18 remain supported by the current automated authentication, question/exam workflow, and deadline-finalization tests. P1 browser evidence is partial for the instructor create/publish/assign action sequence, and there is no manual timer-zero demonstration; these do not negate the passing automated evidence.
+- Shared issue #67 remains open for staging, load/availability, deployment controls, project-board recheck, video-content review, and team acceptance reconciliation. Do not assign those shared/environment tasks to Chhavi without an explicit ownership decision.
+- Question/option shuffling and negative marking are tracked separately in issues #15 and #16 and are not absorbed into issues #4 or #5 here.
+
+**Current decision:** the assigned application implementation for #1, #2, #3, #4, #5, and #18 is present and automated checks pass. External staging/deployment evidence and some practical P1 scenarios remain incomplete; this is not a claim that the full SRS/STP or shared issue #67 is accepted.

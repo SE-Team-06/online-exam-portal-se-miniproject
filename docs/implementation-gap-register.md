@@ -1,12 +1,28 @@
 # Implementation and requirement gap register
 
-## Current acceptance snapshot — 30 October 2026
+## Current acceptance snapshot — 10 November 2026
 
-PR #63 is merged into canonical `main` at `2db1c9d83281601c99a81dd0b018ebe0ec2f5713`. Its verified Actions run [41099637545](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/41099637545) passed clean dependency installation, server tests 168/168, client tests 17/17, syntax checks, and production build. A new `fix/final-issues-1-3-acceptance` branch adds loopback-by-default API binds, production APP_ORIGIN validation, direct-socket anti-spoof tests, and read-only audit API assertions. Those branch changes need their own CI/review and are not represented as passed yet.
+Latest verified `main` is `b2ec87d7234780d595e617f10fd1fe73b9edd7dd`, merging P1 evidence PR #73 after the earlier account/audit and P1 PRs. The latest post-merge Actions run [42769438348](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/42769438348) succeeded on that SHA, including dependency installation, automated tests, syntax checks, and production build. The run summary does not expose the test count; earlier recorded executions report 172 server and 17 client tests.
 
-- **#1:** registration/recovery implementation and tests are present in main. SMTP delivery has not been exercised against staging and remains **BLOCKED** pending secure staging configuration and disposable-mailbox evidence. Do not close.
-- **#3:** admin account lifecycle, audit UI/API, result/submission events, redaction, filters, pagination, and retention-index checks are in main and covered by the green main CI run. Production database least-privilege/immutable audit storage is not deployed or evidenced; candidate branch tests the application's read-only interface. Do not close until candidate CI and independent review complete.
-- The local MongoDB binary cache has a checksum mismatch, so this Windows machine cannot independently rerun Mongo-backed integration tests without a valid download. Do not bypass the checksum. Use GitHub Actions' clean Linux run for reproducible test evidence.
+- **Assigned issues #1, #2, #3, #4, #5, #18:** current source and automated test coverage for their stated application behaviors are present. The current Actions run succeeded. The code and test evidence are summarized in `docs/SPRINT2_ACCEPTANCE_STATUS.md`; P1 manual evidence is in `docs/SYSTEM_VALIDATION_REPORT.md`.
+- **#1:** registration, verification/reset token rules, password policy, and session revocation are implemented and automated-tested with a synthetic transport. Host-browser evidence records an HTTP 503 during registration and a generic reset acknowledgement only. Real staging SMTP delivery, successful activation via delivered link, and completed reset remain unverified. SMTP provisioning is an external/shared dependency; the issue does not establish Chhavi as its individual owner.
+- **#2:** login/logout, salted password storage, role checks, CSRF, session handling, cookie controls, and route authorization have automated test coverage. P1 screenshots additionally evidence generic invalid-login rejection (401), one student-to-instructor denial (403), and post-logout rejection (401).
+- **#3:** administrator create/list, name/password/role updates, activation/deactivation, safeguards, audit filters/pagination/redaction and application-level indefinite retention have source/test coverage. Email is read-only in the UI; SRS FR-OE-006 does not specify that editing must include an email-address change. No insecure email-change path is added. Production proxy, database privilege, backup, and retention operations remain unverified.
+- **#4/#5:** question validation/ownership, exam configuration, publication/assignment, and post-attempt configuration locking are implemented and integration-tested. P1 evidence shows relevant controls and resulting published/assigned states, but the full instructor action sequence is only partially evidenced. Shuffling (#15) and negative marking (#16) remain separate scope.
+- **#18:** server-side deadline finalization, saved/empty answer handling, concurrency, idempotency, late-request rejection and retry/recovery have integration tests. No manual timer-zero or production scheduler/load demonstration is recorded.
+- **P1:** all 19 supplied screenshots and the qualified manual scenario matrix are merged through PRs #72 and #73. The report keeps BLOCKED/PARTIAL/NOT VERIFIED statuses and does not claim complete SRS/STP acceptance.
+- **Local verification in this audit:** the client suite passed 17/17 and `npm run build` passed, including server syntax checks. `npm ci` was blocked by Windows `EPERM` unlinking a Vite native binding. The full server suite could not complete because MongoDB Memory Server's valid downloaded 8.2.6 binary exits with `fassert()` in this execution environment. Integrity checks were not bypassed. This local blocker does not override the green current-main CI run.
+- **Shared issue #67 remains open:** staging email, TC-OE-010 load/availability, deployment controls, current Project board reconciliation, video content review and team-level acceptance follow-up remain shared/external work. Do not attribute these to Chhavi without explicit assignment.
+
+## Historical acceptance snapshot — 30 October 2026 (superseded)
+
+The following status was accurate only at its dated checkpoint. Its candidate-branch statements and “do not close” recommendations are historical and are superseded by the 10 November snapshot above; they are retained as a record of the earlier review.
+
+PR #63 was recorded as merged into canonical `main` at `2db1c9d83281601c99a81dd0b018ebe0ec2f5713`. Its verified Actions run [41099637545](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/41099637545) passed clean locked install, 168 server tests, 17 client tests, syntax checks, and production build. A candidate branch was then awaiting separate CI/review.
+
+- **#1 at that checkpoint:** registration/recovery was implemented; staging SMTP delivery was blocked pending secure configuration and disposable-mailbox evidence.
+- **#3 at that checkpoint:** account lifecycle and audit UI/API were implemented; production database least-privilege and immutable storage were not deployed or evidenced.
+- The local MongoDB cache then had a checksum mismatch. This dated observation is not the result of the later audit run, which downloaded the pinned binary with integrity verification and then encountered the MongoDB process startup failure described above.
 
 ### Historical audit snapshot — 25 October 2026 (superseded)
 

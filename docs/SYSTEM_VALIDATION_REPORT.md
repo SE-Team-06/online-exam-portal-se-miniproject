@@ -8,8 +8,8 @@
 - **Repository:** `SE-Team-06/online-exam-portal-se-miniproject`
 - **Original manual-validation source:** `main` at `95dbeb5d2fc7e56f93f9d156c7880849aa9b6121` (historical attempt; not repeated on that commit)
 - **Application/test baseline used for the original follow-up:** `8727d94aa7ac88bcd723de98b77283a7ffe21143`
-- **Latest main observed after PR #72 merged:** `886df98c607a92cbb74a0a107a400219a14bb3fa`
-- **P1 branch:** `docs/p1-system-validation-2026-11-09` (PR #72 merged at `886df98`; later supplemental evidence edits are not part of that merged PR)
+- **Latest `main` verified for this report:** `b2ec87d7234780d595e617f10fd1fe73b9edd7dd`
+- **P1 delivery:** PR [#72](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/pull/72) merged at `886df98c607a92cbb74a0a107a400219a14bb3fa`; supplemental final evidence was merged by PR [#73](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/pull/73) at `b2ec87d7234780d595e617f10fd1fe73b9edd7dd`.
 
 ## Objective and scope
 
@@ -26,7 +26,7 @@ No production or real student data was used. The demo's generated credentials we
 | npm | 11.20.0 |
 | Browser / app URL | User-supplied manual evidence from Windows Chrome at `127.0.0.1:5173`; screenshots dated 9–10 November, including Chrome device emulation at 360×578 |
 | Demo data | Screenshots show synthetic `example.test` instructor/student accounts and temporary demo exams; screenshots from 9 and 10 November are separate observed states, not proof of one continuous in-memory database session |
-| Source freshness | The application/test baseline was `8727d94`; PR #72 later merged the report at `886df98`. The merge adds documentation only; no application or dependency files changed in that merge. |
+| Source freshness | The application/test baseline was `8727d94`. PRs #72 and #73 added validation documentation/evidence only; neither changed application source, tests, dependencies, or CI. The latest verified `main` is `b2ec87d7234780d595e617f10fd1fe73b9edd7dd`. |
 
 The setup commands were based on the root README (`npm.cmd run demo`). The first attempt used the existing `.cache/mongodb-binaries` and failed MongoDB Memory Server's MD5 check: downloaded binary MD5 `d16c23a3590abc8cb66e33e39692e75b` differed from the published checkfile value `b794b99d839b73b3862972d2e170018f`. No integrity check was bypassed and the original cache was left intact.
 
@@ -59,7 +59,8 @@ The Part 3 test report records a full run against the same server/client code no
 - GitHub Actions run [#108](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/42392165413): completed successfully on the application/test baseline `8727d94aa7ac88bcd723de98b77283a7ffe21143`. Its `checks` job passed locked dependency installation, automated tests, API syntax checks, and the frontend production build.
 - PR #72 check run [#112](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/42765015665): completed successfully on PR head `2dc9756e3fbf7faf9f98347fafc102a197f8fad8`; it passed locked dependency installation, automated tests, API syntax checks, and the frontend production build. PR #72 subsequently merged as `886df98c607a92cbb74a0a107a400219a14bb3fa`.
 - Post-merge `main` Actions run [42765267696](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/42765267696): completed successfully on merge commit `886df98c607a92cbb74a0a107a400219a14bb3fa`; its `checks` job passed dependency installation, automated tests, API syntax checks, and the frontend build.
-- The supplemental screenshot and report edits currently being prepared after that merge are not included in run #112. PR #72 is closed and merged, so no open PR check exists for these supplemental edits.
+- PR #73 [final manual-evidence follow-up](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/pull/73) merged at `b2ec87d7234780d595e617f10fd1fe73b9edd7dd`. The latest post-merge `main` Actions run [42769438348](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/42769438348) completed successfully on that SHA. Its `checks` job passed locked dependency installation, automated tests, API syntax checks, and the frontend production build. The run’s exposed job summary confirms success but does not provide a fresh test-count breakdown; the separately documented 172 server and 17 client counts remain from the earlier recorded test executions.
+- The 19-screenshot supplemental evidence is now part of `main` through PR #73. Its qualified `PASS`, `PARTIAL`, `BLOCKED`, and `NOT VERIFIED` results are in the manual-validation matrix below; merge and CI success do not upgrade those statuses.
 - Automated coverage includes account lifecycle, authentication/RBAC, question/exam workflows, deadline submission, result access, and client form/timer behavior. Exact test-file mapping is in `docs/PART3_TEST_REPORTS_2026-11-04.md`.
 
 These results establish automated test evidence only. They do not establish that a human completed the instructor or student UI flows or that staging SMTP delivered mail. The successful CI dependency installation also does not resolve the Windows-local `npm ci` workspace symlink error recorded in the 9 November follow-up.
