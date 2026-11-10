@@ -1,0 +1,14 @@
+file,date,observed evidence,STP mapping,status/limit
+system-validation-2026-11-09/screenshots/01-login-failed-attempt.png,2026-11-09,Login form rendered with generic failed-authentication message; cause not established,TC-OE-001,OBSERVED
+system-validation-2026-11-09/screenshots/02-instructor-dashboard.png,2026-11-09,Authenticated Instructor dashboard; preseeded published Demo HTTP Basics exam visible,TC-OE-001; TC-OE-003,PASS
+system-validation-2026-11-09/screenshots/03-instructor-question-bank-and-exam-form.png,2026-11-09,Question bank with one existing HTTP question and exam configuration/assignment controls,TC-OE-004; TC-OE-005,PARTIAL
+system-validation-2026-11-09/screenshots/04-student-dashboard-assigned-exams.png,2026-11-09,Authenticated Student dashboard with Demo HTTP Basics and Question test assignments; notifications,TC-OE-005,PASS
+system-validation-2026-11-09/screenshots/05-student-active-exam-timer.png,2026-11-09,"Demo HTTP Basics active exam and countdown visible, no answer selected in capture",TC-OE-006; TC-OE-007,PASS for start and timer display
+system-validation-2026-11-09/screenshots/06-student-submitted-fail-result.png,2026-11-09,"Student submitted result: 0/1, 1 incorrect, Not passed",TC-OE-008; TC-OE-009,PASS for submission/result display
+system-validation-2026-11-09/screenshots/07-instructor-attempt-statistics.png,2026-11-09,"Instructor sees Demo HTTP Basics 0/1 attempt, Not passed, two tab switches; Question test published",TC-OE-009; TC-OE-005,PASS for result visibility
+system-validation-2026-11-10/screenshots/08-mobile-login-360px.png,2026-11-10,"360x578 Chrome device emulation, login form visible and no obvious horizontal overflow in screenshot",TC-OE-001; usability,PASS for visible layout
+system-validation-2026-11-10/screenshots/09-mobile-student-dashboard-360px.png,2026-11-10,"360px Student dashboard header, notifications and results area fit visibly",TC-OE-005; usability,PASS for visible layout
+system-validation-2026-11-10/screenshots/10-mobile-student-assigned-exam-360px.png,2026-11-10,360px assigned exam card and Start exam button fit visibly,TC-OE-005; usability,PASS for visible layout
+system-validation-2026-11-10/screenshots/11-mobile-restored-answer-360px.png,2026-11-10,Selected 200 visible at 360px; user confirmed it remained selected after page refresh,TC-OE-007,PASS for answer restoration per user observation
+system-validation-2026-11-10/screenshots/12-mobile-submitted-pass-result-360px.png,2026-11-10,"Mobile result shows Passed, 1/1, 1 correct, 0 incorrect",TC-OE-008; TC-OE-009,PASS for grading/result display
+system-validation-2026-11-10/screenshots/13-mobile-registration-required-field.png,2026-11-10,Empty registration form triggers browser required-field prompt at 360px,TC-OE-001,PASS for required-field validation
