@@ -55,11 +55,22 @@ Integration tests use a temporary MongoDB process. Its first run may need networ
 
 ## Current implementation boundary
 
-The current `main` includes student registration, email verification, password reset, administrator account management, and administrator audit review alongside the exam workflows. Account-action tokens are stored as hashes, single-use and time-limited. Audit events cover authentication, exam publication, attempt submission, result access, and user changes. Production links require an explicit valid `APP_ORIGIN`; the API binds to loopback by default and trusts one reverse-proxy hop only under the documented private-network deployment model.
+This summary was checked against `main` at `ed3805cc2790795c44aede7387fc448909ea24ae` on 17 November 2026. That main revision has a successful GitHub Actions run ([run ID 44074576817](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/44074576817), workflow run #118). The report documents 172 server and 17 client tests from separate executions on source `a841a6d`; those suites were not rerun for the current documentation update, and the exposed Actions summary does not state a test count.
 
-The API also exposes recipient-scoped notifications at `/api/notifications`, instructor result statistics at `/api/instructor/results`, and CSV export at `/api/instructor/results.csv`. These endpoints require an authenticated session; notification read status requires the session CSRF token.
+Current application code includes student registration and account verification, password reset, session authentication/logout, role checks, administrator user management and audit review, instructor question/exam authoring, student attempts, answer saving and resume, automatic/manual submission, scoring, instructor results/CSV, and in-app notifications. Account-action tokens are hashed, single-use and time-limited. The default API bind is loopback; deployment relies on the documented reverse-proxy/TLS model.
 
-Not yet externally verified: real SMTP delivery and deployed account-link flows, production TLS/proxy configuration, operational retention/backup controls, and instructor/browser acceptance. Broader SRS gaps remain, including question/option shuffling, full timer/recovery acceptance, deployment-scale targets, accessibility/browser evidence, and complete alignment to every SRS/SAD requirement. See `docs/implementation-gap-register.md` and `docs/SPRINT2_ACCEPTANCE_STATUS.md`; passing tests do not mean the full SRS is implemented.
+The following SRS acceptance requirements remain incomplete or unverified; a visible form control or a passing general CI run is not proof of its behavior:
+
+- **Question and option shuffling (FR-OE-009):** the UI sends shuffle settings, but the server schema/model do not persist both settings and the current server code does not apply a question/option permutation. Treat the feature as not implemented.
+- **Email-dependent workflows:** account verification and password reset use a mail transport in code and tests, but staging SMTP delivery and successful browser activation/reset are not verified. The P1 registration attempt returned HTTP 503; its underlying cause was not established.
+- **Notifications (FR-OE-026):** in-app notifications exist; exam assignment/result email notifications are not implemented.
+- **Deadline grace (SEC-OE-009):** the server rejects at `endsAt`; SRS requires a five-second grace. Preserve this as an unresolved design deviation until the team approves a requirement change or implementation fix.
+- **Quantitative NFRs:** no controlled 500-user load/capacity run, 99.5% exam-window availability history, 10,000/1,000/200 data-volume test, or two-second clock-drift measurement is recorded. Tools and health probes do not substitute for those measurements.
+- **Operations/security:** deployment TLS, scheduled backup/restore operations, production retention/access controls, and encryption at rest for personal data/backups lack deployment evidence; at-rest encryption is not implemented in the application configuration.
+- **Accessibility/browser scope:** the 26 October report records 44/44 scoped automated checks and a keyboard walkthrough across Chrome/Chromium/Firefox/WebKit, and P1 records 360 px host-browser views. Edge, previous major browser versions, screen-reader/user testing and exhaustive application coverage remain unverified.
+- **Requirements/design alignment:** implemented route names and API shapes differ from parts of SAD v1.4; see `docs/DEVIATIONS.md` and the RTM's separate actual-source/API evidence. Do not silently equate these references.
+
+The updated `SRS/RTM_Online_Exam_Portal.xlsx` separates implementation status from test-execution status, retains the October 13 evidence as a labeled historical snapshot, and records the current evidence baseline. See `docs/RTM_AUDIT_SUMMARY_2026-11-17.md`, `docs/implementation-gap-register.md`, `docs/SPRINT2_ACCEPTANCE_STATUS.md`, and `docs/SYSTEM_VALIDATION_REPORT.md` for scope and limitations. Test success is not a claim that the complete SRS is implemented or accepted.
 
 ## Project collaboration
 
