@@ -1,87 +1,194 @@
-# Deviations from the Submitted Documents
+# Requirements, Design and Test-Plan Deviations
 
-Compares the running implementation with the submitted **SRS v1.2**, **SAD v1.4** and **STP v1.1**, as required for the final demo.
+This document records differences between the submitted requirements and design and the implementation evidenced in the repository. It distinguishes implementation from acceptance verification; a passing automated test does not establish an untested deployment or end-user scenario.
 
-- **Baseline:** `main` at `a60f3d5` (26 Oct 2026) plus open PRs **#49, #50, #51** (merge in that order). Rows marked *Resolved* are fixed by those PRs or by the already-merged #43 / #44.
-- **History:** first version 26 Oct (PR #45, end of Sprint 1); updated the same day after the Sprint 2 fixes.
-- **Owner:** Gagan (P4, design). Update this file when a deviation is fixed or a new one is introduced.
-- The requirement-by-requirement status is in [implementation-gap-register.md](implementation-gap-register.md). This file explains **what differs from the documents and why**.
+## Current review baseline
 
-## 1. Design deviations (SAD v1.4)
+- **Repository:** [SE-Team-06/online-exam-portal-se-miniproject](https://github.com/SE-Team-06/online-exam-portal-se-miniproject)
+- **Current source baseline:** `main` at `ed3805cc2790795c44aede7387fc448909ea24ae` (verified 17 November 2026).
+- **Review date:** 17 November 2026.
+- **Latest main CI:** Node CI run [#118](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/44074576817) completed successfully for this exact SHA on 17 November 2026. Its success confirms the workflow result; the recorded detailed counts (172 server and 17 client) come from the test report and separate executions, not from a fresh rerun for this document update.
+- **Authoritative documents:** SRS v1.2 (`SRS/SRS_Online_Exam_Portal.pdf`), SAD v1.4 (`SAD_Online_Exam_Portal_v1.4.pdf`), STP v1.2 (`STP/Online_Exam_Portal_Software_Test_Plan_v1.2.pdf`). The v1.1 STP is retained as a historical document and is not the current test-plan baseline.
+- **Evidence:** source and tests cited below; [`SYSTEM_VALIDATION_REPORT.md`](SYSTEM_VALIDATION_REPORT.md), [`SPRINT2_ACCEPTANCE_STATUS.md`](SPRINT2_ACCEPTANCE_STATUS.md), [`UNIT_TEST_REPORT.md`](UNIT_TEST_REPORT.md), [`test-execution.md`](test-execution.md), [`ACCESSIBILITY_BROWSER_REPORT.md`](ACCESSIBILITY_BROWSER_REPORT.md), and [`OPERATIONS.md`](OPERATIONS.md).
+- **Historical ownership:** The original deviations document was prepared by Gagan (P4). Its historical assessment and contribution are retained. This 17 November update is a later status reconciliation prepared by Chhavi; it does not change attribution for the original work. No Product Owner, instructor, or team approval of deviations is claimed unless separately recorded.
 
-Deliberate implementation choices that differ from the design. None reduces a requirement except where "Impact" says so.
+### Status meanings
 
-| # | SAD reference | Documented | Implemented | Reason | Impact / action |
-|---|---|---|---|---|---|
-| D-01 | §3.6 Tech stack; SD-01 | JWT in an HttpOnly cookie, bound to a server session | Random 256-bit **opaque session token** in an HttpOnly cookie; only its SHA-256 hash is stored in `sessions` | Server-side sessions can be revoked instantly on logout or inactivity (FR-OE-004, SEC-OE-006) with no token-signing key to manage | None. Meets the same requirements more simply. Update SAD §3.6 |
-| D-02 | §3.6 | `bcrypt` / Argon2 | `bcryptjs` (pure-JS bcrypt), cost 12 | No native build step on Windows/macOS/CI | None. Same algorithm and hash format (SEC-OE-001) |
-| D-03 | §4.3.1 | Joi / express-validator | **zod** schemas per route | Single schema library for parsing and validation | None |
-| D-04 | §4.3.1–4.3.2 | Base path `/api/v1` | Base path `/api` (no version prefix) | Single client, no external API consumers yet | Low. Add `/v1` if the API is opened to other clients |
-| D-05 | §4.1 data entities | Separate `answers`, `assignments`, `focusEvents` collections | Answers and focus timestamps **embedded in the `attempts` document**; assignments are `exams.assignedStudentIds` | One document per attempt makes save/submit atomic and keeps the "one attempt" rule on a unique `(examId, studentId)` index | None for current scale (NFR-OE-011 untested) |
-| D-06 | §4.3.2 API-09, API-10 | Create exam, then publish/assign as a separate step | `POST /api/exams` **creates, publishes and assigns in one call**; status is always `Published` | Simpler instructor flow for the MVP | FR-OE-011 met. No draft stage, so "visible before publication" is only in the form. Consider a draft state in Sprint 2 |
-| D-07 | §4.3.3 API-13; SD-02 | Batched auto-save `PATCH /attempts/:id/answers` every 30 s and on change, with `clientSeq` | `PUT /api/attempts/:id/answers/:questionId` **sent immediately on every answer change**; no periodic timer | Saving every change is at least as safe as a 30 s batch: nothing unsaved is left to batch | FR-OE-017 and NFR-OE-005 met by design (data loss ≤ one in-flight request). No `clientSeq` ordering |
-| D-08 | SD-02; NFR-OE-010 | Client timer corrected by a server-time offset returned on every response | Countdown uses the **browser clock** against the server-issued `endsAt`; the server enforces the deadline (rejects late saves, auto-submits) | Server enforcement was prioritised | **Resolved (#49):** responses include `serverTime`; the countdown applies the offset |
-| D-09 | §4.3.3 API-13, API-15; SEC-OE-009 | Answers accepted until `endsAt` + **5 s grace** | Answers rejected from `endsAt` exactly (409 `ATTEMPT_ENDED`); no grace period | Stricter than documented | Low. A save sent in the last second may be refused. Action: decide whether to add the 5 s grace or update the SRS |
-| D-10 | SD-03 | Auto-Submit Job every **10 s** | Expiry worker every **5 s** (`server/src/index.js`) | Faster finalisation | None (improvement) |
-| D-11 | §4.3.2 API-14 | `POST /attempts/:id/focus-events`, sent by the browser on blur/tab switch | Endpoint is `POST /api/attempts/:id/focus-loss` and stores timestamps, but **the React client never calls it** | Client wiring not done | **Resolved (#49):** the browser records tab/window switches; instructors see the count and times. Path stays `/focus-loss` |
-| D-12 | §4.3.2 API-17, API-18 | Per-exam results `GET /exams/:id/results` (+ `/export`) with average, highest, lowest and pass % | `GET /api/instructor/results` and `/results.csv` across **all** the instructor's exams; statistics are total, average and pass rate | Single results page for the MVP | **Resolved (#49):** per-exam statistics (average, highest, lowest, pass rate) and an instructor results screen. Still one endpoint for all exams instead of `/exams/:id/results` |
-| D-13 | §4.4.1 error catalogue | `INVALID_CREDENTIALS` (401), `ACCOUNT_LOCKED` (423), `EXAM_NOT_OPEN`, `ATTEMPT_CLOSED`, `EXAM_LOCKED` | `LOGIN_FAILED` (401, also when locked), `EXAM_CLOSED`, `ATTEMPT_ENDED`, `EXAM_LOCKED`; unassigned exam/attempt returns **404** instead of 403 | Locked accounts get the same generic 401 so attackers cannot tell a locked account apart; 404 avoids revealing that another student's attempt exists | Low. STP test cases using the SAD codes must use the implemented codes |
-| D-14 | §4.4.1 error envelope | `{ error: { code, message, details, requestId } }` + `X-Request-Id` header | `{ error: { code, message } }`; no request ID | Not built | Low. Harder to trace a user's error in logs |
-| D-15 | §4.4.2–4.4.3 | Structured JSON logging (pino/winston) with redaction; Prometheus metrics M-01…M-08, Grafana, alerts | `console` logging of error messages only; `GET /api/health` returns a fixed `ok` (no DB check); **no metrics or alerting** | Out of Sprint 1 scope | **Partly resolved (#51):** health check pings MongoDB (200/503), and an external probe plus monthly report measure availability in exam windows (replaces M-04). Still no Prometheus metrics, latency dashboards or structured logs (M-01…M-03, M-05…M-07); performance is #22 |
-| D-16 | §3.4 Notification Service; FR-OE-026 | In-app **and email** (SMTP) notifications | **In-app only** (`notifications` collection) | No SMTP service configured | **Partial:** FR-OE-026 email part missing |
-| D-17 | §4.5 UX: submit dialog | Confirmation showing unanswered and flagged counts | Submit button submitted **without a confirmation** | Not built in Sprint 1 | **Resolved (#49):** dialog shows unanswered and flagged counts; flag-for-review added (FR-OE-015) |
-| D-18 | SEC-OE-005 | HTTPS only, plain HTTP rejected | `REQUIRE_HTTPS` / `NODE_ENV=production` rejects plain HTTP with 403 `HTTPS_REQUIRED` (merged, #44); TLS terminated by a reverse proxy | TLS belongs at the proxy, not in Node | No deployment yet, so TLS itself is unverified. See [SECURITY_DEPLOYMENT.md](SECURITY_DEPLOYMENT.md) |
-| D-19 | §4.4.3 M-08; NFR-OE-006 | Backup job monitored as a metric | Backup is a gzip'd Extended-JSON export of all collections written by the API (`BACKUP_DIR`) or `npm run backup`, keeping the newest 7; restore command included (#51) | Works without installing MongoDB Database Tools (`mongodump`) on every machine | Backups are not encrypted (SEC-OE-012); store them on an encrypted volume. No alert on failure, only a log line |
-| D-20 | §4.3.2 (not in SAD) | — | New `DELETE /api/admin/users/:userId/data` for deactivated accounts; audit entries kept (#51) | NFR-OE-014 needed an endpoint the SAD did not list | Add to SAD API catalogue. No UI until user management (#3) |
+- **RESOLVED** — the stated implementation gap has since been addressed; any remaining measurement or deployment limitation is called out separately.
+- **ACCEPTED DESIGN DEVIATION** — implementation intentionally differs from the design. This label describes the implemented choice, not formal Product Owner or instructor approval; approval evidence was not located for the choices below.
+- **PARTIALLY RESOLVED** — some of the gap is addressed, but a material part remains.
+- **OPEN** — the design/requirement difference remains unresolved or implementation is missing.
+- **NOT VERIFIED** — evidence is insufficient to establish the behavior in the required environment.
 
-## 2. Scope deviations (SRS v1.2)
+Implementation and verification are reported separately in each row. Source existence, issue closure, and CI success alone do not establish full SRS acceptance.
 
-Requirements not yet delivered, or delivered only in part. Must items cannot be dropped without the Product Owner's and instructor's agreement.
+## 1. Design deviations from SAD v1.4
 
-| Requirement | Priority | Status | Tracking |
+The October 26 table below was a contemporaneous assessment. The “Current status” and evidence columns update that assessment against the 17 November `main` baseline. The original design expectation and rationale are retained where known; a rationale is not treated as proof of formal approval.
+
+| ID | Original SAD expectation | Current implementation and reason recorded | Impact and current status | Evidence and remaining action |
+|---|---|---|---|---|
+| **D-01** | SAD §3.6 / SD-01: JWT in an HttpOnly cookie, bound to a server session. | A random opaque session token is placed in an HttpOnly cookie; only its SHA-256 hash is stored server-side. Server-side sessions support revocation on logout/inactivity and avoid a signing key. | **ACCEPTED DESIGN DEVIATION** — no approval record located. Functional security intent is implemented; deployment cookie/proxy settings still require operational verification. | `server/src/security/session.js`, `server/src/app.js`; `server/test/security.test.js`. Update SAD terminology if the team approves the as-built design. |
+| **D-02** | SAD §3.6: native `bcrypt` or Argon2. | `bcryptjs` bcrypt hashing, cost 12, avoids a native module build dependency across developer/CI platforms. | **ACCEPTED DESIGN DEVIATION** — same bcrypt family, but a different package; no formal approval record located. | `server/src/security/password.js`; auth-lifecycle and security tests. Confirm the approved dependency choice during document review. |
+| **D-03** | SAD §4.3: Joi or express-validator request validation. | Route schemas use Zod. The project uses one schema approach for parsing and validation. | **ACCEPTED DESIGN DEVIATION** — validation purpose remains, implementation library differs; no approval record located. | `server/src/app.js` and route schemas; workflow/auth/admin integration tests. Align SAD if approved. |
+| **D-04** | SAD §4.3.1–4.3.2: API root `/api/v1`. | Implemented routes use `/api` without a version prefix; a single first-party client is the recorded rationale. | **ACCEPTED DESIGN DEVIATION** — no API-version namespace; adding one later would require coordinated client/API migration. | `server/src/app.js`, `client/src/`; API integration tests. SAD endpoint catalogue needs alignment; no external-client compatibility test is claimed. |
+| **D-05** | SAD §4.1: separate answers, assignments, and focus-event collections. | Attempt answers and focus timestamps are embedded in attempt documents; assigned student IDs are stored on exams. Atomic attempt updates and a unique exam/student attempt constraint are the rationale. | **ACCEPTED DESIGN DEVIATION** — model differs while supporting current workflows. Data growth, document-size limits and target-scale behavior remain **NOT VERIFIED**. | `server/src/models/index.js`, `server/src/app.js`; `server/test/workflow.test.js`; `server/src/ops/scale.js`. Run agreed scale tests before making capacity claims. |
+| **D-06** | SAD API-09/API-10: create exam, then publish and assign in a separate step. | `POST /api/exams` creates a published exam with selected students assigned in the same flow; there is no persisted draft lifecycle. MVP simplification is the recorded rationale. | **ACCEPTED DESIGN DEVIATION** — no draft/review state; users cannot save a draft and publish later. | `server/src/app.js`, `server/src/models/index.js`, `client/src/main.jsx`; `server/test/workflow.test.js`; P1 evidence is qualified in the system validation report. SAD/API and product owners should decide whether a draft lifecycle is required. |
+| **D-07** | SAD API-13 / SD-02: batch `PATCH` every 30 seconds and on change, with `clientSeq`. | Client sends a `PUT` for each answer change. There is no periodic batch timer or `clientSeq`; immediate persistence was chosen to reduce unsaved-answer time. | **ACCEPTED DESIGN DEVIATION** — a request can still be in flight or fail; retries/offline queueing, ordering under delayed requests and the SRS recovery-point target are not thereby proven. | `client/src/exam-session.js`, `client/src/main.jsx`, `server/src/app.js`; `client/test/exam-session.test.js`, `server/test/workflow.test.js`; P1 screenshot 11 supports one restored answer. Measure loss/latency and exercise network failure before claiming the full NFR. |
+| **D-08** | SAD SD-02 / NFR-OE-010: countdown corrected by server-time offset. | API responses expose server time; the client calculates an offset and uses it with the server-issued deadline. This supersedes the October browser-clock-only finding. | **RESOLVED** for the missing offset behavior. The quantitative ≤2-second real-device drift target remains **NOT VERIFIED**. | `server/src/app.js`, `client/src/exam-session.js`; `client/test/exam-session.test.js`, workflow tests; P1 timer screenshots 05/14 and user-reported refresh observation. Controlled drift measurements remain needed. |
+| **D-09** | SAD API-13/API-15 and SEC-OE-009: accept answers until `endsAt` plus 5 seconds. | Server rejects late answer writes at the deadline (`ATTEMPT_ENDED`); no 5-second grace is implemented. The stricter cutoff was recorded as the chosen behavior. | **OPEN** — conflicts with the submitted requirement and can reject a request sent at the boundary. Do not claim conformance or silently update SRS/SAD. | `server/src/app.js`; `server/test/workflow.test.js` boundary/late-answer cases; issue #18 covers automatic submission, not approval of this grace-period deviation. Requires an authorized requirements decision and corresponding implementation or approved document change. |
+| **D-10** | SAD SD-03: automatic-submission worker every 10 seconds. | Worker checks expired attempts every 5 seconds, selected for faster finalization. | **ACCEPTED DESIGN DEVIATION** — shorter polling interval; production scheduling/reliability and load are not verified by the local/in-memory tests. | `server/src/index.js`, `server/src/app.js`; `server/test/workflow.test.js` expiry, idempotency and recovery tests; issue #18 / PR #35 history. Verify worker behavior in a deployed environment if required. |
+| **D-11** | SAD API-14: `POST /attempts/:id/focus-events`, called by browser blur/tab-switch events. | Client now sends focus-loss events to `/api/attempts/:id/focus-loss`; timestamps are persisted and shown in instructor statistics. This supersedes the October finding that the React client did not call the endpoint. | **RESOLVED** for missing client wiring and display. Endpoint path differs from SAD; completeness of browser focus detection is not established for every browser/lifecycle event. | `server/src/app.js`, `server/src/models/index.js`, client attempt/focus code; `server/test/workflow.test.js`; P1 screenshot 07 records two tab switches. Align SAD endpoint name if approved. |
+| **D-12** | SAD API-17/API-18: per-exam result endpoint/export and average, highest, lowest and pass percentage. | Instructor results are exposed through aggregate `/api/instructor/results` and `/results.csv`; results include per-exam statistics. One instructor results surface was chosen for the MVP. | **ACCEPTED DESIGN DEVIATION** — functional statistics/export exist, but the endpoint shape differs. P1 evidence verifies a displayed attempt/statistics view, not the full export behavior. | `server/src/app.js`, `client/src/main.jsx`, `server/test/workflow.test.js`; P1 screenshot 07. Update SAD catalogue or retain this explicit API mapping. |
+| **D-13** | SAD §4.4.1: distinct `INVALID_CREDENTIALS`, `ACCOUNT_LOCKED` (423), `EXAM_NOT_OPEN`, `ATTEMPT_CLOSED`, `EXAM_LOCKED` errors. | Generic `LOGIN_FAILED` (401) avoids disclosing whether credentials/account state caused rejection; implemented exam/attempt codes and 404 scoping avoid disclosing another user's records. | **ACCEPTED DESIGN DEVIATION** — generic authentication error is a security improvement, but client/STP expectations must match the actual contract. No formal design approval located. | `server/src/app.js`; `server/test/security.test.js`, `server/test/workflow.test.js`; P1 screenshot 17 verifies one generic invalid-login 401. Reconcile SAD/STP catalogue through document-owner review. |
+| **D-14** | SAD §4.4.1: `{error:{code,message,details,requestId}}` and `X-Request-Id`. | Error responses use `{error:{code,message}}`; request IDs and the specified details envelope are not consistently provided. Simpler handling was chosen during MVP work. | **OPEN** — support diagnostics and exact SAD response conformance are missing. | `server/src/app.js`; API tests assert implemented response behavior. Add request correlation and safe details only through a reviewed design change; do not claim the SAD envelope is present. |
+| **D-15** | SAD §4.4.2–4.4.3: structured/redacted logs, Prometheus metrics, dashboards and alerts. | Application health checks MongoDB and returns health status; scale/availability scripts and operational instructions exist. Full structured observability, metrics, dashboards, and alerting are not evidenced. | **PARTIALLY RESOLVED** — health and measurement tooling exist, but production monitoring and TC-OE-010 evidence remain absent. | `server/src/ops/scale.js`, health route in `server/src/app.js`, `docs/OPERATIONS.md`; operations tests and `docs/SYSTEM_VALIDATION_REPORT.md` TC-OE-010 = NOT VERIFIED. Run controlled deployment/load/availability checks and configure operations monitoring. |
+| **D-16** | SAD §3.4 / SRS FR-OE-026: assignment and result notifications in-app and by email. | In-app notifications are implemented; assignment/result SMTP notifications are not. Account verification/reset email transport is a separate feature, and actual staging delivery is unverified. Lack of configured service was previously cited as the reason. | **OPEN** for email notifications; **PARTIAL** overall. | `server/src/app.js`, `server/src/models/index.js`, `client/src/main.jsx`; workflow tests. See issues #19/#67 and [`SYSTEM_VALIDATION_REPORT.md`](SYSTEM_VALIDATION_REPORT.md). Implement and test email notification behavior only if the requirement remains in scope; staging delivery needs actual service/mailbox evidence. |
+| **D-17** | SAD §4.5: submission confirmation showing unanswered and flagged counts. | Student submission now has a confirmation dialog and flag-for-review interaction. This supersedes the October observation that submission occurred immediately. | **RESOLVED** for confirmation/count presentation. The P1 capture verifies the dialog and warning, not every keyboard interaction or a completed click sequence. | Client exam UI; client tests; P1 screenshot 14; `docs/SYSTEM_VALIDATION_REPORT.md` SV-10-12 (TC-OE-008). Preserve the evidence limitation. |
+| **D-18** | SEC-OE-005: HTTPS only; reject plain HTTP. | Application can require HTTPS (`REQUIRE_HTTPS` / production setting); deployment expects TLS at a reverse proxy. | **NOT VERIFIED** operationally — app-level enforcement exists, but no production deployment/TLS scan evidence establishes proxy configuration, certificate validity, or end-to-end HTTP rejection. | `server/src/security/transport.js`, `docs/SECURITY_DEPLOYMENT.md`; security tests exercise configured application behavior. Deployment/TLS check remains required; distinguish local HTTP development. |
+| **D-19** | SAD M-08 / NFR-OE-006: monitored backup job. | Extended JSON compressed backup and restore tooling exists; optional scheduled worker runs when `BACKUP_DIR` is configured and keeps the configured number (default seven). Tool-independent backup was the recorded rationale. | **PARTIALLY RESOLVED** — backup code and tests exist, but a configured production schedule, restore drill, encrypted storage and failure alerting are not demonstrated. Backups are not encrypted by the application. | `server/src/ops/backup.js`, `server/src/index.js`, `server/src/ops/cli.js`, `docs/OPERATIONS.md`; `server/test/operations.test.js`. Run a target-environment backup/restore drill and define protected storage/alerting. |
+| **D-20** | SAD §4.3.2 did not list user-data deletion. | Administrator API `DELETE /api/admin/users/:userId/data` deletes account-associated data for eligible accounts while retaining audit records; added for SRS retention/deletion needs. | **PARTIALLY RESOLVED** — endpoint exists, but is not represented in the SAD catalogue and has no corresponding admin UI action. Production authorization/retention operation is not externally verified. | `server/src/app.js`, `server/test/operations.test.js`, `docs/OPERATIONS.md`. SAD owner should review catalogue; confirm whether UI is required by the SRS before adding it. |
+
+## 2. SRS scope and implementation reconciliation
+
+The table retains the scope rows from the prior version and corrects present-tense statements that later work superseded. Status refers to application implementation; verification/operational caveats are explicit. “Done” below does not mean full system acceptance.
+
+| SRS requirement | Priority | Current implementation status | Evidence / remaining acceptance gap |
 |---|---|---|---|
-| FR-OE-001, 002 registration and email verification | Must | Not started. Accounts are pre-provisioned (seed/demo) | #1 |
-| FR-OE-005 password reset | Must | Not started | #1 / backlog |
-| FR-OE-006 admin user and role management | Must | Not started | #3 |
-| FR-OE-009 question/option shuffling | Should | Not implemented (`shuffleQuestions` field exists, unused). Issue #15 is closed but its criteria are not met | Reopen #15 |
-| FR-OE-010 negative marking | Could | Done (#43) | #16 closed |
-| FR-OE-017 auto-save | Must | Done, by a different mechanism (D-07) | — |
-| FR-OE-015 flag for review | Must | Done (#49) | #46 |
-| FR-OE-019 manual submit with confirmation | Must | Done (#49) | #46 |
-| FR-OE-021 focus-loss logging | Should | Done (#49) | #47 |
-| FR-OE-024 instructor statistics | Must | Done (#49): per-exam average, highest, lowest, pass rate | #47 |
-| FR-OE-026 notifications | Should | In-app only (D-16) | — |
-| FR-OE-027 audit log view | Should | Events recorded; no admin view or filters | #21 |
-| NFR-OE-001…003, 011 performance and scale | Must/Should | Not measured; no load tests | #22 |
-| NFR-OE-004 availability | Must | Measurable (#51: DB health check, probe, monthly report); no deployment yet, so no real figure | #23 |
-| NFR-OE-006 daily backup, keep 7 | Should | Done (#51); not yet scheduled on a server | #23 |
-| NFR-OE-014 retention and deletion on request | Should | Done (#51): nothing retained expires (test-enforced); admin deletion API | #23 |
-| NFR-OE-008, 009 accessibility and browsers | Should/Must | Verified (#50): WCAG 2.1 A/AA automated checks and keyboard walkthrough pass in Chrome 156, Firefox 157 and WebKit 27 at 1280 and 360 px. **Edge and previous browser versions not tested** | #24 |
-| NFR-OE-010 timer accuracy | Must | Done (#49): server-time offset; ≤ 2 s drift not yet measured on real devices | #48 |
-| SEC-OE-002 password rules | Must | Rule exists (`passwordIsCompliant`), applies once registration (#1) exists | #1 |
-| SEC-OE-005 HTTPS | Must | App-level enforcement (#44); no deployment | #20 closed |
-| SEC-OE-009 5 s grace | Must | Stricter: no grace (D-09) | decide |
-| SEC-OE-011 audit fields and retention | Must | Events have user, IP and time; no 12-month retention policy or result-access events | #21 |
-| SEC-OE-012 encryption at rest | Should | Not implemented (database or backups) | backlog |
+| FR-OE-001, FR-OE-002 registration and email verification | Must | **PARTIAL** — registration, validation, uniqueness, hashing, verification-token expiry/single use and login gating are implemented and automated-tested with a controlled/mock transport. | `server/src/app.js`, `server/src/security/email.js`, `server/test/auth-lifecycle.test.js`; PRs #60/#63/#64/#65. P1 recorded a 503 on registration. Successful delivered verification link and real staging SMTP remain BLOCKED/NOT VERIFIED; do not describe as “not started” or as fully accepted. |
+| FR-OE-005 password reset | Must | **PARTIAL** — reset request/token logic, expiry/single use, generic response and session invalidation have code/test evidence. | `server/src/app.js`, `server/test/auth-lifecycle.test.js`; PRs #60/#63/#64/#65. P1 only verified generic request acknowledgement; no delivered reset link or completed browser reset. Historical “not started” is superseded. |
+| FR-OE-006 admin user and role management | Must | **IMPLEMENTED; automated-tested** — administrator can create/list/edit supported fields, change roles and activation; protected by role/CSRF and safeguards. | `server/src/app.js`, `server/src/models/index.js`, `client/src/AdminUsersPanel.jsx`, `server/test/admin-users.test.js`, `server/test/security.test.js`; PRs #60/#63/#64/#65. Full manual admin workflow and production controls remain unverified. Historical “not started” is superseded. |
+| FR-OE-009 question and option shuffling | Should | **NOT IMPLEMENTED** — UI/model traces do not establish randomized delivery or option ordering; no execution/scoring test verifies it. | Exam form/model and `server/src/app.js`; issue #15 was closed but its closure is not proof of implementation. Implement and test both question and option shuffling or record an approved requirements change. |
+| FR-OE-010 negative marking | Could | **PARTIAL / implementation present** — a non-negative penalty value participates in scoring; scoring tests cover deductions/floor/unanswered behavior. | Exam model/form and scoring in `server/src/app.js`; workflow/scoring tests; issue #16. Separate enable/disable semantics and full instructor-to-student acceptance are not fully demonstrated. |
+| FR-OE-017 auto-save | Must | **IMPLEMENTED, with design deviation** — answers are sent on each change rather than in the SAD's 30-second batch; saved answers can be restored in the evidenced path. | D-07; client exam-session code, `server/test/workflow.test.js`, `client/test/exam-session.test.js`, P1 screenshot 11. Offline/retry/latency and formal RPO target remain unverified. |
+| FR-OE-015 flag for review | Must | **IMPLEMENTED** | Client exam UI and tests; PR #49; P1 exam/session evidence. |
+| FR-OE-019 manual submit with confirmation | Must | **IMPLEMENTED** | Client exam UI and tests; PR #49; P1 screenshot 14 verifies confirmation dialog, not the final action. |
+| FR-OE-021 focus-loss logging | Should | **IMPLEMENTED, design path differs** — client sends focus-loss requests; event is persisted and instructor-visible. | `/api/attempts/:id/focus-loss`; `server/test/workflow.test.js`; PR #49; P1 screenshot 07 shows two tab switches. Coverage of every browser lifecycle event is not claimed. |
+| FR-OE-024 instructor statistics | Must | **IMPLEMENTED** for current results/attempt statistics surface. | `/api/instructor/results`, UI and workflow tests; PR #49; screenshot 07. P1 action-sequence evidence is qualified; not all exports/statistical edge cases were manually checked. |
+| FR-OE-026 notifications | Should | **PARTIAL** — in-app notifications exist; assignment/result email notifications are missing. | Notification code/UI and workflow tests; D-16, issue #19/#67. Actual account SMTP delivery is separately unverified. |
+| FR-OE-027 audit log view | Should | **IMPLEMENTED in application with operational limits** — administrator-only filtered/paginated/redacted viewer and read-only API; relevant audit events and no-TTL application policy have test/documentation evidence. | `/api/admin/audit-logs`, admin UI, `server/test/operations.test.js`, `server/test/admin-users.test.js`, `docs/OPERATIONS.md`; issues #3/#21 and PRs #60/#63/#64/#65. Production database privileges, immutable backup/storage and operational retention are NOT VERIFIED. Event coverage should be checked against each SRS action; do not overstate missing/combined action distinctions. |
+| NFR-OE-001…003, NFR-OE-011 performance and scale | Must/Should | **NOT VERIFIED** against quantitative targets. | `server/src/ops/scale.js` supplies measurement tooling, but TC-OE-010 load/500-user/p95/error/storage acceptance was not run in P1 report. No result should be inferred from unit tests or CI. |
+| NFR-OE-004 availability | Must | **PARTIAL / NOT VERIFIED** — health endpoint and probe/report instructions exist; no deployment observation period or measured availability figure is recorded. | health route, `docs/OPERATIONS.md`, `docs/SYSTEM_VALIDATION_REPORT.md` TC-OE-010. Deployment/monitoring evidence remains required. |
+| NFR-OE-006 daily backup and keep seven | Should | **IMPLEMENTED, operational verification pending** — optional scheduled backup and seven-file default retention exist. | D-19; `server/src/ops/backup.js`, `server/src/index.js`, `server/test/operations.test.js`, `docs/OPERATIONS.md`. Production schedule, restore drill and encrypted storage are unverified. |
+| NFR-OE-014 retention and deletion on request | Should | **PARTIAL** — application-level indefinite audit retention (no TTL expiry) and administrator data deletion API are implemented/tested. | `server/src/app.js`, `server/test/operations.test.js`, `docs/OPERATIONS.md`; D-20. Production access controls, documented retention operations and storage protection remain unverified. |
+| NFR-OE-008/009 accessibility and browser support | Should/Must | **PARTIAL** — documented automated accessibility and keyboard/browser checks cover stated browsers/viewports; P1 has desktop/360px manual evidence. | [`ACCESSIBILITY_BROWSER_REPORT.md`](ACCESSIBILITY_BROWSER_REPORT.md), PR #50, P1 screenshots and report. Edge/older versions, assistive-technology coverage, exhaustive accessibility and all-device support are not claimed. |
+| NFR-OE-010 timer accuracy | Must | **IMPLEMENTED; quantitative acceptance NOT VERIFIED** — server-derived deadline and offset are used. | D-08; `client/src/exam-session.js`, tests; TC-OE-006 mapping and P1 screenshots/user report. ≤2-second drift across real devices/network conditions has not been measured. |
+| SEC-OE-002 password rules | Must | **IMPLEMENTED and automated-tested** | `server/src/security/password.js`, auth-lifecycle tests. Successful real email-dependent account activation remains separate. |
+| SEC-OE-005 HTTPS | Must | **Application enforcement implemented; deployment NOT VERIFIED** | D-18; `server/src/security/transport.js`, `docs/SECURITY_DEPLOYMENT.md`. Production proxy/TLS and external scan evidence absent. |
+| SEC-OE-009 five-second grace | Must | **NOT CONFORMANT / OPEN** — current code rejects at deadline with no 5-second grace. | D-09; `server/src/app.js` and workflow boundary tests. Needs implementation or an approved change to the source requirement. |
+| SEC-OE-011 audit fields and retention | Must | **PARTIAL** — audit writer/viewer, actor/time/action and applicable IP capture/redaction/filtering, application no-expiry behavior exist; event and operational policy must be assessed per action. | Audit routes/models/tests and `docs/OPERATIONS.md`; TC-OE-003/009. External database least privilege, immutable storage and deployed retention controls not verified. |
+| SEC-OE-012 encryption at rest | Should | **NOT IMPLEMENTED / NOT VERIFIED** — application does not encrypt database records or backup files at rest. | `docs/SECURITY_DEPLOYMENT.md`, `docs/OPERATIONS.md`. Configure and verify storage/volume or database-provider encryption; do not imply transport TLS covers at-rest data. |
 
-Agreed change already recorded in SRS v1.2 §2.6 and SAD v1.4: the score is shown immediately after submit; question-wise review with correct answers is available only after the exam end time and only if enabled (`GET /api/attempts/:id/review`). Implemented as documented.
+### Other documented requirements and scope notes
 
-## 3. Test plan deviations (STP v1.1)
+- Exam configuration, question ownership/validation, publication and assignment are implemented and automated-tested; the persisted combined create/publish/assign flow is D-06. P1 screenshots show controls and resulting states but do not capture every instructor action click.
+- Student assigned-exam visibility, start, answer persistence, timer display, submission, result scoring, and instructor statistics have API/UI implementation and automated tests. P1 system-validation rows indicate exactly which browser observations were captured, reported, partial, blocked or not verified.
+- Audit submission finalization is designed for idempotency and duplicate-event prevention; automatic submission and retry/recovery have workflow tests. Do not infer production scheduler reliability from in-memory tests.
+- The SRS v1.2 / SAD v1.4 agree that score is shown immediately after submit while question-wise review/correct answers are withheld until exam end and only when enabled. This is a documented rule, not a deviation; retain the existing review endpoint reference and its authorization tests.
 
-| STP item | Planned | Actual |
-|---|---|---|
-| §5 levels and tools | Unit, integration, system and acceptance testing with Selenium, Postman, JMeter/k6 | Automated **unit and API integration tests** (`node:test` + supertest + in-memory MongoDB) run in GitHub Actions on every PR and push. No Selenium UI automation or load tests yet |
-| §13 TC-OE-001…010 | 10 planned test cases mapped to requirements | The STP cases have not been executed as written. The automated tests exercise parts of their scope: login/logout/credential storage (TC-OE-001), lockout and 429 (TC-OE-002, no password reset), RBAC (TC-OE-003, no audit view), question bank and exam setup (TC-OE-004), attempt, save and submit authorisation (TC-OE-006/007) and scoring (TC-OE-008). Results and CSV (#49) and backup/retention (#51) now have tests, covering part of TC-OE-009. **No automated tests yet** for notifications (TC-OE-005) or load (TC-OE-010). Run records are in [test-execution.md](test-execution.md) |
-| Error codes in API test cases | SAD §4.4.1 codes | Use the implemented codes (D-13) |
-| Usability / accessibility (NFR-OE-007…009) | Manual checks | Automated `npm run check:a11y` (axe-core WCAG A/AA, 360 px, keyboard dialog) in 4 browsers plus a manual keyboard walkthrough (#50). Results in [ACCESSIBILITY_BROWSER_REPORT.md](ACCESSIBILITY_BROWSER_REPORT.md) |
-| Reliability (NFR-OE-005, 006) | Recovery testing | Backup/restore round trip and retention automated (#51). No server-crash recovery test |
-| §5.1 security validation | TLS scan, penetration testing | Application-level security tests (#44: 401/403/role on every route, credential handling, cookies, HTTPS mode). TLS scan pending a deployment |
+## 3. Test-plan deviations and current STP v1.2 evidence
 
-## 4. For the final demo
+The earlier table referred to STP v1.1 and incorrectly implied that the planned cases had not been executed at all. The authoritative current plan is STP v1.2. Automated server/client suites, GitHub Actions and manual system validation are distinct evidence types. The recorded test executions were separate: 172 server tests and 17 client tests; they are not a claim that every TC-OE case was fully executed.
 
-When presenting, group the deviations as:
+| STP v1.2 item | Planned approach | Evidence now available | Status / gap |
+|---|---|---|---|
+| §5 test levels/tools | Unit, integration, system and acceptance tests, with browser/API/load tools as specified by STP. | `server/test/` and `client/test/`, GitHub Actions, `docs/UNIT_TEST_REPORT.md`, `docs/test-execution.md`, `docs/SYSTEM_VALIDATION_REPORT.md`. | Automated unit/API integration tests pass in recorded runs; the separate manual report has mixed outcomes. No claim that the whole STP was accepted. Load/availability TC-OE-010 remains NOT VERIFIED. |
+| TC-OE-001 — account registration/authentication | Registration, verification and authentication, including security constraints. | Auth lifecycle/security tests; P1 manual seeded login, invalid-login 401, required-field validation, observed registration 503. | **PARTIAL/BLOCKED** end-to-end: delivered verification mail, successful activation and real SMTP not evidenced. |
+| TC-OE-002 — password recovery and account security | Password-reset request/reset, token rules and relevant lock/security cases. | Auth lifecycle tests cover token logic; P1 screenshot 18 verifies only generic request acknowledgement. | **PARTIAL / NOT VERIFIED**: no delivered reset email or completed browser reset; real delivery blocked/unverified. |
+| TC-OE-003 — roles, permissions and audit | Role authorization, audit access and related security controls. | Security/admin/operations tests; P1 screenshot 15 shows one Student-to-instructor 403; admin audit browser workflow not captured in P1. | **PARTIAL** manual acceptance; automated coverage exists, but one screenshot is not a complete RBAC/audit review. |
+| TC-OE-004 — question bank and exam configuration | Instructor question and exam configuration behavior. | Workflow tests; P1 screenshot 03 shows question bank/form controls; report qualifies action sequence as partial. | **PARTIAL** manual evidence; shuffle behavior is a separate missing requirement (FR-OE-009). |
+| TC-OE-005 — publish/assign and student availability/notifications | Publishing, assignment visibility and notifications. | Workflow tests; P1 screenshots 04 and 10 show assigned exams; notification automated/manual scope is limited. | Assignment visibility verified; email notification requirement remains missing and end-to-end workflow evidence is partial. |
+| TC-OE-006 — start, timing, focus, submission behavior | Attempt start, timer and related controls. | Workflow/client tests; P1 screenshots 05/14 and 07; refresh timer continuation user-reported. | Tested portions pass; full time-boundary, quantitative drift and all focus/browser edge cases are NOT VERIFIED. |
+| TC-OE-007 — answer saving and recovery | Answer persistence and resume/recovery. | Workflow/client tests; P1 screenshot 11 shows a restored answer with user-reported refresh. | Partial acceptance: no offline queue, network fault injection or autosave latency/RPO measurements. |
+| TC-OE-008 — submission and evaluation | Manual/automatic submission, confirmation and grading. | Workflow/scoring tests; P1 screenshots 06, 12, 14 show different submitted outcomes and confirmation dialog. | Relevant captured behaviors verified; screenshot does not show complete dialog interaction, and production automatic worker/load remains unverified. |
+| TC-OE-009 — results and data protection | Results, exports, audit/data controls and applicable operational behavior. | Workflow/admin/operations tests; P1 screenshot 07 shows instructor attempt/statistics. | Result display partially verified manually; CSV, admin audit controls, backup and retention were not manually run in P1; deployed protection not verified. |
+| TC-OE-010 — performance/availability/load | Quantitative load, capacity and availability targets. | Measurement scripts and operations guidance exist. | **NOT VERIFIED** — no controlled TC-OE-010 execution or measured target results in the system-validation report. |
+| §5.1 security validation | Security checks including TLS and application controls. | Automated route/RBAC/CSRF/session/password tests; app HTTPS enforcement tests; no deployed TLS scan. | Application controls have test evidence; penetration testing, deployed TLS, production proxy/security configuration and broader threat validation remain NOT VERIFIED. |
 
-1. **Improvements on the design:** D-01 (revocable sessions), D-05 (atomic attempt document), D-07 (save on every change), D-10 (faster auto-submit), D-13 (generic lockout message), D-19 (backups with no extra tools).
-2. **Simplifications for the MVP:** D-04, D-06, D-12, D-14, D-16.
-3. **Fixed during Sprint 2:** D-08, D-11, D-12, D-17 (#49), accessibility (#50), availability/backup/retention (#51).
-4. **Still open:** D-09 (5 s grace), D-15 metrics, D-16 email, and the rows still marked not started in Section 2 (registration, password reset, admin users, shuffling, audit view, performance, encryption at rest).
+See [`SYSTEM_VALIDATION_REPORT.md`](SYSTEM_VALIDATION_REPORT.md) for the dated scenario-by-scenario expected/actual/status matrix and screenshot links. Its original 2–6 November record and later 9–10 November browser evidence are separate. The observed registration 503 does not identify its root cause. The report keeps real SMTP, successful activation, completed password reset, TC-OE-010 and exhaustive accessibility/cross-browser checks unverified.
+
+## 4. Historical October 26 assessment (retained, superseded)
+
+This section preserves the meaning of the original October 26 baseline: `main` at `a60f3d5` plus then-open PRs #49, #50 and #51. It is **not** the current source baseline. At that time the document cited STP v1.1 and recorded registration, reset, admin management and audit viewing as not started or missing; it also described focus tracking, submission confirmation and several Sprint 2 items as incomplete. Subsequent sprints and merged PRs changed that state. Those historical statements are intentionally preserved here as a dated snapshot and must not be read as current status.
+
+PRs #49–#51 were then proposals, not merged evidence. Later work associated with PRs #60, #63, #64 and #65 added account lifecycle, administrator/audit and audit-hardening functionality; PR #35 addressed automatic submission; PR #49/#50/#51 history documents later timer/focus/UX, accessibility, and operations work. Current verification references are in Sections 1–3 and the linked reports. A merge establishes code history, not acceptance by itself.
+
+The older [`implementation-gap-register.md`](implementation-gap-register.md) also contains dated October snapshots, including some “not started” entries. Those are historical findings where clearly headed as such. Its 10 November acceptance snapshot is the later status record. This update does not rewrite that separate document.
+
+## 5. Final demo and viva summary
+
+### Accepted implementation differences (formal approval not located)
+
+- Opaque revocable sessions instead of JWT; `bcryptjs`; Zod; unversioned `/api` route base.
+- Embedded attempt answers/focus timestamps and exam assignment IDs.
+- Immediate per-answer save, 5-second rather than 10-second auto-submit polling, aggregate instructor results APIs, generic authentication errors, and simplified error envelope.
+- These choices should be explained as current implementation decisions and checked against SAD v1.4. Do not say the Product Owner/instructor formally approved them without an approval record.
+
+### Improvements or later-resolved implementation findings
+
+- Server-time offset in the countdown (D-08), client focus-loss reporting and instructor visibility (D-11), and a submission confirmation with unanswered/flag counts (D-17) supersede earlier missing-feature observations.
+- Health/backup/restore tooling, audit viewer, account lifecycle and admin management have since been implemented or expanded. Automated tests support those code claims, subject to each row's remaining deployment/manual limits.
+
+### MVP simplifications and open implementation gaps
+
+- No separate draft-to-publish lifecycle (D-06); no API version prefix (D-04); response correlation/request IDs remain absent (D-14).
+- Question/option shuffling is not implemented (FR-OE-009); assignment/result email notifications are missing (D-16); the five-second answer grace period is missing (D-09).
+- Full structured metrics, dashboards and alerting are not evidenced (D-15); at-rest database/backup encryption is not implemented (SEC-OE-012).
+
+### External or acceptance-verification gaps
+
+- Real staging verification/reset mail delivery, successful registration via delivered link, and full reset via delivered link.
+- Production HTTPS/TLS/proxy, configured backup schedule and restore drill, production retention/database privileges, and operational alerts.
+- TC-OE-010 quantitative load/availability/capacity results and measured timer drift.
+- Exhaustive accessibility/cross-browser/assistive-technology coverage and any manual scenario not marked PASS in the P1 matrix.
+
+### Suggested concise viva explanation
+
+“We retained the submitted SRS/SAD/STP as the requirements baseline and tracked implementation differences instead of silently changing them. Later sprints completed account and administrator/audit application flows, server-adjusted timing, focus-loss reporting, submission confirmation and operational backup/health tooling. Some design choices remain different from the SAD and are listed explicitly. We have automated evidence and dated browser evidence, but SMTP delivery, production deployment controls, quantitative load testing and some requirements—including the five-second grace period and question/option shuffling—are still open or unverified. We therefore do not claim full SRS or STP acceptance.”
+
+### Likely faculty questions and accurate answers
+
+**Why use an opaque session token rather than JWT?** The implementation uses a random opaque cookie token and stores only its hash, which supports server-side revocation. This is a design difference from SAD v1.4; it is not described as formally approved unless the team provides that record.
+
+**Is registration complete?** Registration, policy, token and login-gating logic have automated coverage, but the manual run returned 503 and the delivered verification message/link was not verified. We distinguish implementation from successful staging acceptance.
+
+**Does password reset work end to end?** Token logic and generic request handling have automated coverage. The manual evidence shows only the generic request acknowledgement; email receipt and completion using the link were not verified.
+
+**Why is question shuffling marked open if there is a model/UI field?** A field or control alone does not randomize the questions/options returned to the student. The server behavior and tests do not establish shuffling, so FR-OE-009 remains unimplemented.
+
+**Are all audit requirements met?** The application has administrator-restricted, filtered, paginated, redacted, read-only audit review and tested application-level retention behavior. This does not establish production database permissions, immutable storage or deployed retention operations; event coverage must be judged against each required action.
+
+**Does CI passing mean the whole test plan passed?** No. The recorded 172 server and 17 client tests are automated executions, not all ten STP scenarios. TC-OE-010 was not run; some browser cases are partial, blocked or not verified.
+
+**Is the application production-secure and available?** The code contains relevant controls and operational tooling, but production TLS/proxy, deployment, availability, backup restore, monitoring and quantitative load results have not been evidenced. We do not claim production readiness from local tests.
+
+## 6. Outstanding items by severity
+
+### Critical to requirement conformance
+
+- **Must / D-09:** resolve the missing 5-second submission grace through implementation or a formally approved requirements change; preserve the submitted baseline until authorized.
+- **Must / account flows:** obtain successful staging delivery and complete verification/reset journeys if email-based acceptance is required. Current P1 evidence is blocked/partial, not a pass.
+- **Must / security and availability targets:** execute controlled deployment/security and quantitative TC-OE-010 checks if the assignment requires evidence of these targets.
+
+### Material functional gaps
+
+- **Should / FR-OE-009:** implement and test question and option shuffling or obtain an approved scope change; issue #15 being closed does not satisfy it.
+- **Should / FR-OE-026:** assignment/result email notifications are not implemented; in-app notifications alone are partial.
+- **Should / SEC-OE-012:** configure and verify at-rest encryption for database and backup storage.
+- **D-14:** SAD request-ID/error-envelope diagnostics are not implemented.
+
+### Operational and design-document follow-up
+
+- **D-15 / D-19 / D-20:** production monitoring/alerts, backup schedule and restore drill, storage protection, and SAD catalogue/UI decision for data-deletion endpoint.
+- Align SAD API paths, error catalogue, data model and create/publish lifecycle with the implementation only after document-owner/team review. No approval is presumed by this status update.
+- Run or document any remaining manual TC-OE cases and retain their true statuses. Do not infer a pass from source, issue state, PR merge or CI.
+
+## 7. Cross-document consistency notes
+
+- This file's current baseline is `ed3805cc2790795c44aede7387fc448909ea24ae` (17 November 2026); the 26 October `a60f3d5` reference is explicitly historical.
+- Current references point to SRS v1.2, SAD v1.4 and STP v1.2. STP v1.1 appears only as a superseded historical version, not as the present test plan.
+- Historical “not started” statements in earlier dated snapshots remain preserved but are explicitly superseded. Current account/admin/audit status is qualified by automated, manual and external evidence separately.
+- Automated counts are reported as separate suite executions (172 server, 17 client) from the recorded test evidence; this document does not claim they were rerun for the 17 November documentation update. The prior Actions run reported successful checks; consult [`SPRINT2_ACCEPTANCE_STATUS.md`](SPRINT2_ACCEPTANCE_STATUS.md) and [`SYSTEM_VALIDATION_REPORT.md`](SYSTEM_VALIDATION_REPORT.md) for exact run and execution baselines.
+- Current P1 manual evidence is summarized in the system-validation report. That report's own latest-main snapshot is `b2ec87d7234780d595e617f10fd1fe73b9edd7dd` from 10 November 2026; this is preserved as its historical evidence baseline. The later current main at `ed3805c` adds the STP v1.2 PDF; it does not mean the November 9–10 browser sessions were repeated on that later commit. The report documents genuine screenshots and user-reported actions with limitations, including 503 registration, generic reset acknowledgement, and no real SMTP delivery evidence.
+- The implementation-gap register retains its dated October history and 10 November snapshot. Its historical rows should not be read as present status; this file does not edit that separate team record.
+- GitHub issue/PR state is supplementary traceability only. Issue closure and merged PRs do not independently prove all acceptance criteria.
