@@ -58,7 +58,7 @@ The table retains the scope rows from the prior version and corrects present-ten
 | FR-OE-001, FR-OE-002 registration and email verification | Must | **PARTIAL** — registration, validation, uniqueness, hashing, verification-token expiry/single use and login gating are implemented and automated-tested with a controlled/mock transport. | `server/src/app.js`, `server/src/security/email.js`, `server/test/auth-lifecycle.test.js`; PRs #60/#63/#64/#65. P1 recorded a 503 on registration. Successful delivered verification link and real staging SMTP remain BLOCKED/NOT VERIFIED; do not describe as “not started” or as fully accepted. |
 | FR-OE-005 password reset | Must | **PARTIAL** — reset request/token logic, expiry/single use, generic response and session invalidation have code/test evidence. | `server/src/app.js`, `server/test/auth-lifecycle.test.js`; PRs #60/#63/#64/#65. P1 only verified generic request acknowledgement; no delivered reset link or completed browser reset. Historical “not started” is superseded. |
 | FR-OE-006 admin user and role management | Must | **IMPLEMENTED; automated-tested** — administrator can create/list/edit supported fields, change roles and activation; protected by role/CSRF and safeguards. | `server/src/app.js`, `server/src/models/index.js`, `client/src/AdminUsersPanel.jsx`, `server/test/admin-users.test.js`, `server/test/security.test.js`; PRs #60/#63/#64/#65. Full manual admin workflow and production controls remain unverified. Historical “not started” is superseded. |
-| FR-OE-009 question and option shuffling | Should | **NOT IMPLEMENTED** — UI/model traces do not establish randomized delivery or option ordering; no execution/scoring test verifies it. | Exam form/model and `server/src/app.js`; issue #15 was closed but its closure is not proof of implementation. Implement and test both question and option shuffling or record an approved requirements change. |
+| FR-OE-009 question and option shuffling | Should | *USER-REPORTED MANUAL PASS* / IMPLEMENTATION NOT INDEPENDENTLY CONFIRMED — The user reports observing both question-order and answer-option shuffling in the student examination flow. However, the current source review does not establish that both settings are persisted and applied consistently by the server. The manual observation and source-level discrepancy require reconciliation before marking the requirement fully implemented.
 | FR-OE-010 negative marking | Could | **PARTIAL / implementation present** — a non-negative penalty value participates in scoring; scoring tests cover deductions/floor/unanswered behavior. | Exam model/form and scoring in `server/src/app.js`; workflow/scoring tests; issue #16. Separate enable/disable semantics and full instructor-to-student acceptance are not fully demonstrated. |
 | FR-OE-017 auto-save | Must | **IMPLEMENTED, with design deviation** — answers are sent on each change rather than in the SAD's 30-second batch; saved answers can be restored in the evidenced path. | D-07; client exam-session code, `server/test/workflow.test.js`, `client/test/exam-session.test.js`, P1 screenshot 11. Offline/retry/latency and formal RPO target remain unverified. |
 | FR-OE-015 flag for review | Must | **IMPLEMENTED** | Client exam UI and tests; PR #49; P1 exam/session evidence. |
@@ -77,7 +77,7 @@ The table retains the scope rows from the prior version and corrects present-ten
 | SEC-OE-005 HTTPS | Must | **Application enforcement implemented; deployment NOT VERIFIED** | D-18; `server/src/security/transport.js`, `docs/SECURITY_DEPLOYMENT.md`. Production proxy/TLS and external scan evidence absent. |
 | SEC-OE-009 five-second grace | Must | **NOT CONFORMANT / OPEN** — current code rejects at deadline with no 5-second grace. | D-09; `server/src/app.js` and workflow boundary tests. Needs implementation or an approved change to the source requirement. |
 | SEC-OE-011 audit fields and retention | Must | **PARTIAL** — audit writer/viewer, actor/time/action and applicable IP capture/redaction/filtering, application no-expiry behavior exist; event and operational policy must be assessed per action. | Audit routes/models/tests and `docs/OPERATIONS.md`; TC-OE-003/009. External database least privilege, immutable storage and deployed retention controls not verified. |
-| SEC-OE-012 encryption at rest | Should | **NOT IMPLEMENTED / NOT VERIFIED** — application does not encrypt database records or backup files at rest. | `docs/SECURITY_DEPLOYMENT.md`, `docs/OPERATIONS.md`. Configure and verify storage/volume or database-provider encryption; do not imply transport TLS covers at-rest data. |
+| SEC-OE-012 encryption at rest | Should | **NOT IMPLEMENTED  — application does not encrypt database records or backup files at rest. | `docs/SECURITY_DEPLOYMENT.md`, `docs/OPERATIONS.md`. Configure and verify storage/volume or database-provider encryption; do not imply transport TLS covers at-rest data. |
 
 ### Other documented requirements and scope notes
 
@@ -107,88 +107,3 @@ The earlier table referred to STP v1.1 and incorrectly implied that the planned 
 
 See [`SYSTEM_VALIDATION_REPORT.md`](SYSTEM_VALIDATION_REPORT.md) for the dated scenario-by-scenario expected/actual/status matrix and screenshot links. Its original 2–6 November record and later 9–10 November browser evidence are separate. The observed registration 503 does not identify its root cause. The report keeps real SMTP, successful activation, completed password reset, TC-OE-010 and exhaustive accessibility/cross-browser checks unverified.
 
-## 4. Historical October 26 assessment (retained, superseded)
-
-This section preserves the meaning of the original October 26 baseline: `main` at `a60f3d5` plus then-open PRs #49, #50 and #51. It is **not** the current source baseline. At that time the document cited STP v1.1 and recorded registration, reset, admin management and audit viewing as not started or missing; it also described focus tracking, submission confirmation and several Sprint 2 items as incomplete. Subsequent sprints and merged PRs changed that state. Those historical statements are intentionally preserved here as a dated snapshot and must not be read as current status.
-
-PRs #49–#51 were then proposals, not merged evidence. Later work associated with PRs #60, #63, #64 and #65 added account lifecycle, administrator/audit and audit-hardening functionality; PR #35 addressed automatic submission; PR #49/#50/#51 history documents later timer/focus/UX, accessibility, and operations work. Current verification references are in Sections 1–3 and the linked reports. A merge establishes code history, not acceptance by itself.
-
-The older [`implementation-gap-register.md`](implementation-gap-register.md) also contains dated October snapshots, including some “not started” entries. Those are historical findings where clearly headed as such. Its 10 November acceptance snapshot is the later status record. This update does not rewrite that separate document.
-
-## 5. Final demo and viva summary
-
-### Accepted implementation differences (formal approval not located)
-
-- Opaque revocable sessions instead of JWT; `bcryptjs`; Zod; unversioned `/api` route base.
-- Embedded attempt answers/focus timestamps and exam assignment IDs.
-- Immediate per-answer save, 5-second rather than 10-second auto-submit polling, aggregate instructor results APIs, generic authentication errors, and simplified error envelope.
-- These choices should be explained as current implementation decisions and checked against SAD v1.4. Do not say the Product Owner/instructor formally approved them without an approval record.
-
-### Improvements or later-resolved implementation findings
-
-- Server-time offset in the countdown (D-08), client focus-loss reporting and instructor visibility (D-11), and a submission confirmation with unanswered/flag counts (D-17) supersede earlier missing-feature observations.
-- Health/backup/restore tooling, audit viewer, account lifecycle and admin management have since been implemented or expanded. Automated tests support those code claims, subject to each row's remaining deployment/manual limits.
-
-### MVP simplifications and open implementation gaps
-
-- No separate draft-to-publish lifecycle (D-06); no API version prefix (D-04); response correlation/request IDs remain absent (D-14).
-- Question/option shuffling is not implemented (FR-OE-009); assignment/result email notifications are missing (D-16); the five-second answer grace period is missing (D-09).
-- Full structured metrics, dashboards and alerting are not evidenced (D-15); at-rest database/backup encryption is not implemented (SEC-OE-012).
-
-### External or acceptance-verification gaps
-
-- Real staging verification/reset mail delivery, successful registration via delivered link, and full reset via delivered link.
-- Production HTTPS/TLS/proxy, configured backup schedule and restore drill, production retention/database privileges, and operational alerts.
-- TC-OE-010 quantitative load/availability/capacity results and measured timer drift.
-- Exhaustive accessibility/cross-browser/assistive-technology coverage and any manual scenario not marked PASS in the P1 matrix.
-
-### Suggested concise viva explanation
-
-“We retained the submitted SRS/SAD/STP as the requirements baseline and tracked implementation differences instead of silently changing them. Later sprints completed account and administrator/audit application flows, server-adjusted timing, focus-loss reporting, submission confirmation and operational backup/health tooling. Some design choices remain different from the SAD and are listed explicitly. We have automated evidence and dated browser evidence, but SMTP delivery, production deployment controls, quantitative load testing and some requirements—including the five-second grace period and question/option shuffling—are still open or unverified. We therefore do not claim full SRS or STP acceptance.”
-
-### Likely faculty questions and accurate answers
-
-**Why use an opaque session token rather than JWT?** The implementation uses a random opaque cookie token and stores only its hash, which supports server-side revocation. This is a design difference from SAD v1.4; it is not described as formally approved unless the team provides that record.
-
-**Is registration complete?** Registration, policy, token and login-gating logic have automated coverage, but the manual run returned 503 and the delivered verification message/link was not verified. We distinguish implementation from successful staging acceptance.
-
-**Does password reset work end to end?** Token logic and generic request handling have automated coverage. The manual evidence shows only the generic request acknowledgement; email receipt and completion using the link were not verified.
-
-**Why is question shuffling marked open if there is a model/UI field?** A field or control alone does not randomize the questions/options returned to the student. The server behavior and tests do not establish shuffling, so FR-OE-009 remains unimplemented.
-
-**Are all audit requirements met?** The application has administrator-restricted, filtered, paginated, redacted, read-only audit review and tested application-level retention behavior. This does not establish production database permissions, immutable storage or deployed retention operations; event coverage must be judged against each required action.
-
-**Does CI passing mean the whole test plan passed?** No. The recorded 172 server and 17 client tests are automated executions, not all ten STP scenarios. TC-OE-010 was not run; some browser cases are partial, blocked or not verified.
-
-**Is the application production-secure and available?** The code contains relevant controls and operational tooling, but production TLS/proxy, deployment, availability, backup restore, monitoring and quantitative load results have not been evidenced. We do not claim production readiness from local tests.
-
-## 6. Outstanding items by severity
-
-### Critical to requirement conformance
-
-- **Must / D-09:** resolve the missing 5-second submission grace through implementation or a formally approved requirements change; preserve the submitted baseline until authorized.
-- **Must / account flows:** obtain successful staging delivery and complete verification/reset journeys if email-based acceptance is required. Current P1 evidence is blocked/partial, not a pass.
-- **Must / security and availability targets:** execute controlled deployment/security and quantitative TC-OE-010 checks if the assignment requires evidence of these targets.
-
-### Material functional gaps
-
-- **Should / FR-OE-009:** implement and test question and option shuffling or obtain an approved scope change; issue #15 being closed does not satisfy it.
-- **Should / FR-OE-026:** assignment/result email notifications are not implemented; in-app notifications alone are partial.
-- **Should / SEC-OE-012:** configure and verify at-rest encryption for database and backup storage.
-- **D-14:** SAD request-ID/error-envelope diagnostics are not implemented.
-
-### Operational and design-document follow-up
-
-- **D-15 / D-19 / D-20:** production monitoring/alerts, backup schedule and restore drill, storage protection, and SAD catalogue/UI decision for data-deletion endpoint.
-- Align SAD API paths, error catalogue, data model and create/publish lifecycle with the implementation only after document-owner/team review. No approval is presumed by this status update.
-- Run or document any remaining manual TC-OE cases and retain their true statuses. Do not infer a pass from source, issue state, PR merge or CI.
-
-## 7. Cross-document consistency notes
-
-- This file's current baseline is `ed3805cc2790795c44aede7387fc448909ea24ae` (17 November 2026); the 26 October `a60f3d5` reference is explicitly historical.
-- Current references point to SRS v1.2, SAD v1.4 and STP v1.2. STP v1.1 appears only as a superseded historical version, not as the present test plan.
-- Historical “not started” statements in earlier dated snapshots remain preserved but are explicitly superseded. Current account/admin/audit status is qualified by automated, manual and external evidence separately.
-- Automated counts are reported as separate suite executions (172 server, 17 client) from the recorded test evidence; this document does not claim they were rerun for the 17 November documentation update. The prior Actions run reported successful checks; consult [`SPRINT2_ACCEPTANCE_STATUS.md`](SPRINT2_ACCEPTANCE_STATUS.md) and [`SYSTEM_VALIDATION_REPORT.md`](SYSTEM_VALIDATION_REPORT.md) for exact run and execution baselines.
-- Current P1 manual evidence is summarized in the system-validation report. That report's own latest-main snapshot is `b2ec87d7234780d595e617f10fd1fe73b9edd7dd` from 10 November 2026; this is preserved as its historical evidence baseline. The later current main at `ed3805c` adds the STP v1.2 PDF; it does not mean the November 9–10 browser sessions were repeated on that later commit. The report documents genuine screenshots and user-reported actions with limitations, including 503 registration, generic reset acknowledgement, and no real SMTP delivery evidence.
-- The implementation-gap register retains its dated October history and 10 November snapshot. Its historical rows should not be read as present status; this file does not edit that separate team record.
-- GitHub issue/PR state is supplementary traceability only. Issue closure and merged PRs do not independently prove all acceptance criteria.
