@@ -3,7 +3,7 @@
 
 A student Software Engineering mini-project implementing an online multiple-choice examination portal.
 
-The submitted Software Requirements Specification (SRS v1.2) defines the requirements and specifies a MERN-stack solution. This repository contains a starter implementation built with React, Express and MongoDB. The SRS and supporting project documents remain the requirements source of truth; the implementation should not be assumed to satisfy every specified requirement.
+The submitted Software Requirements Specification (SRS v1.2) defines the requirements and specifies a MERN-stack solution. The repository contains a React/Vite client, Node.js/Express API, and MongoDB/Mongoose persistence with account, examination, instructor, and administrator workflows. The SRS and supporting documents remain the requirements source of truth; this implementation overview does not mean every requirement is complete or accepted.
 
 ## Table of contents
 
@@ -43,7 +43,7 @@ The project includes account-related workflows, examination attempts, scoring, r
 | Testing | Automated server and client test suites |
 | Build | npm scripts and Vite |
 
-The project uses a React client and an Express API backed by MongoDB. Refer to the project source and deployment documentation for implementation and configuration details.
+The project uses a React client and an Express API backed by MongoDB through Mongoose. Refer to the source and [deployment guide](docs/Other_docs/DEPLOYMENT.md) for implementation and configuration details.
 
 ## Prerequisites
 
@@ -156,7 +156,7 @@ Build the application:
 npm.cmd run build
 ```
 
-The execution history is maintained in [`docs/test-execution.md`](docs/test-execution.md).
+The execution history is maintained in [`docs/Other_docs/test-execution.md`](docs/Other_docs/test-execution.md).
 
 Automated test success and a successful build establish evidence for the tested implementation snapshot. They do not establish complete SRS compliance, browser acceptance or production readiness.
 
@@ -164,7 +164,7 @@ Integration tests use a temporary MongoDB process. The first execution may need 
 
 ## Linux deployment
 
-Refer to [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the documented Linux deployment procedure, including:
+Refer to [`docs/Other_docs/DEPLOYMENT.md`](docs/Other_docs/DEPLOYMENT.md) for the documented Linux deployment procedure, including:
 
 - Required services and runtime dependencies
 - Environment variables
@@ -176,7 +176,7 @@ The documented target is a standard Linux server running Node.js and MongoDB.
 
 The repository does not currently include a Docker image or Docker Compose configuration.
 
-For administrator audit review and operational measurements, see [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
+For administrator audit review and operational measurements, see [`docs/Other_docs/OPERATIONS.md`](docs/Other_docs/OPERATIONS.md).
 
 ## Troubleshooting
 
@@ -237,9 +237,7 @@ A visible UI control, a successful general CI run or an automated workflow test 
 
 **Question and option shuffling — FR-OE-009**
 
-The instructor interface exposes both question-order and answer-option shuffle settings. The user reports observing both behaviours in the student examination flow. This is recorded as a user-reported manual PASS.
-
-However, source-level inspection raises a discrepancy concerning persistence and server-side application of both settings. The reported observation is not independent implementation evidence. Keep the implementation status disputed until the source discrepancy is reconciled.
+The instructor interface exposes question-order and answer-option shuffle settings, but the current API input schema does not accept those flags and the server has no permutation logic. The exam model stores only a `shuffleQuestions` field and does not store `shuffleOptions`. A later user report says both behaviours were observed, but it is not supported by reproducible screenshot or test evidence and conflicts with the source. The RTM therefore classifies the requirement as **NOT IMPLEMENTED** on the inspected source baseline; the reported observation needs a reproducible test before changing that status.
 
 **Email-dependent workflows**
 
@@ -317,22 +315,24 @@ The following documents provide detailed requirements, design, implementation an
 | SRS v1.2 | Software requirements and acceptance criteria |
 | SAD | Software architecture and design |
 | Test Plan | Testing scope, strategy and planned verification |
-| `docs/test-execution.md` | Historical test execution record |
+| `docs/Other_docs/test-execution.md` | Historical test execution record |
 | `docs/DEVIATIONS.md` | Requirements deviations and implementation limitations |
-| `docs/RTM_AUDIT_SUMMARY_2026-11-17.md` | Requirements traceability audit and evidence summary |
-| `docs/implementation-gap-register.md` | Implementation gaps and open items |
-| `docs/SPRINT2_ACCEPTANCE_STATUS.md` | Sprint acceptance status |
+| `docs/Other_docs/RTM_AUDIT_SUMMARY_2026-11-17.md` | Requirements traceability audit and evidence summary |
+| `docs/Other_docs/implementation-gap-register.md` | Implementation gaps and open items |
+| `docs/Other_docs/SPRINT2_ACCEPTANCE_STATUS.md` | Sprint acceptance status |
 | `docs/SYSTEM_VALIDATION_REPORT.md` | System validation evidence and limitations |
-| `docs/TEAM_HANDOVER.md` | Team status, setup handover and proposed next steps |
-| `docs/DEPLOYMENT.md` | Linux deployment instructions |
-| `docs/OPERATIONS.md` | Operational procedures and measurements |
-| `docs/PRESENTATION_CHECKLIST.md` | Demo and project-management claim checklist |
+| `docs/Other_docs/TEAM_HANDOVER.md` | Team status, setup handover and proposed next steps |
+| `docs/Other_docs/DEPLOYMENT.md` | Linux deployment instructions |
+| `docs/Other_docs/OPERATIONS.md` | Operational procedures and measurements |
+| `docs/Other_docs/PRESENTATION_CHECKLIST.md` | Demo and project-management claim checklist |
 
 The RTM workbook at `SRS/RTM_Online_Exam_Portal.xlsx` separates implementation status from test-execution status, retains the October 13 evidence as a labeled historical snapshot, and records the current evidence baseline.
 
 Historical test counts must be interpreted against their corresponding source revisions and execution records. In particular, the reported 172 server tests and 17 client tests came from separate executions on source `a841a6d`; they were not rerun for the documentation update.
 
-The `main` revision checked for this README was `ed3805cc2790795c44aede7387fc448909ea24ae`, dated 17 November 2026. GitHub Actions workflow run [#118](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/44074576817) completed successfully for that revision. The exposed Actions summary does not state a test count.
+The latest `main` revision checked for this documentation follow-up is `d334e706ea47b4602082f985462091df2d3a469f` (17 November 2026). The application source inspected for the RTM is `ed3805cc2790795c44aede7387fc448909ea24ae`; later commits changed documentation and supporting files, not application source. The latest successful main CI evidence available is run [#120 / ID 44090998452](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/44090998452) on earlier main `ccdf970b2150cef8b13cd13269a76f8868a4e243`. PR #76's own run [#121 / ID 44092967605](https://github.com/SE-Team-06/online-exam-portal-se-miniproject/actions/runs/44092967605) passed on PR head `0e4109bc999def723ba0eb1bb6e9b430e8fa92dd`; it is not a post-merge run on current `main`. No per-suite counts are exposed by these run summaries.
+
+The current RTM classifies 38 requirements as implementation DONE, 7 PARTIAL, 6 NOT VERIFIED and 2 NOT IMPLEMENTED. Test execution is separate: 22 PASS, 25 PARTIAL, 1 requirement-conformance FAIL and 5 NOT RUN. The FAIL is the SRS five-second submission-grace mismatch; its strict-cutoff test passes as a test but documents behavior that does not meet the SRS. See [`docs/Other_docs/RTM_AUDIT_SUMMARY_2026-11-17.md`](docs/Other_docs/RTM_AUDIT_SUMMARY_2026-11-17.md) for the evidence and caveats.
 
 A successful CI run is evidence about the checks executed by that workflow. It is not evidence that every SRS requirement is implemented, tested or accepted.
 
